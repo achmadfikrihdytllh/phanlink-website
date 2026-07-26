@@ -1,1 +1,93 @@
-<p>chat-layout works!</p>
+<div class="chat-layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">PHAN<span>LINK</span></div>
+    </div>
+
+    <div class="conversation-list">
+      @for (conv of conversations(); track conv.id) {
+        <div
+          class="conversation-item"
+          [class.active]="selectedConversation()?.id === conv.id"
+          (click)="selectConversation(conv)"
+        >
+          <div class="avatar-wrap">
+            <div class="avatar-shadow"></div>
+            <div class="avatar">{{ (conv.name?.charAt(0) ?? '?').toUpperCase() }}</div>
+          </div>
+          <div class="conv-info">
+            <div class="conv-name">{{ conv.name ?? 'Percakapan' }}</div>
+            <div class="conv-preview">
+              {{ conv.latest_message?.body ?? 'Belum ada pesan' }}
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- Chat Area -->
+  <div class="chat-area">
+    @if (selectedConversation(); as conversation) {
+      <div class="chat-header">
+        <div class="avatar-wrap small">
+          <div class="avatar-shadow"></div>
+          <div class="avatar">{{ getOtherParticipantInitial() }}</div>
+        </div>
+        <div class="chat-header-name">{{ conversation.name ?? 'Percakapan' }}</div>
+      </div>
+
+      <div class="feed" #feedContainer>
+        <div class="feed-inner">
+          <svg class="line-layer">
+            @for (c of connectors(); track c.key) {
+              <path [attr.d]="c.d" class="connector-path"></path>
+            }
+          </svg>
+
+          <div class="bubbles-wrap" #bubblesWrap>
+            @for (msg of messages(); track msg.id) {
+              <div
+                class="message-row"
+                [class.align-right]="isMyMessage(msg)"
+              >
+                @if (!isMyMessage(msg)) {
+                  <div class="avatar-wrap tiny">
+                    <div class="avatar-shadow"></div>
+                    <div class="avatar">{{ msg.sender.name.charAt(0).toUpperCase() }}</div>
+                  </div>
+                }
+                <div
+                  #bubbleEl
+                  class="bubble"
+                  [class.bubble-dark]="!isMyMessage(msg)"
+                  [class.bubble-light]="isMyMessage(msg)"
+                  [class.point-left]="!isMyMessage(msg)"
+                  [class.point-right]="isMyMessage(msg)"
+                >
+                  {{ msg.body }}
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <input
+          type="text"
+          [(ngModel)]="newMessageTextModel"
+          (keyup.enter)="sendMessage()"
+          placeholder="Ketik pesan..."
+          class="message-input"
+        />
+        <button class="send-btn" (click)="sendMessage()">KIRIM</button>
+      </div>
+    } @else {
+      <div class="empty-state">
+        <div class="empty-text">Pilih percakapan untuk mulai chat</div>
+      </div>
+    }
+  </div>
+</div>

@@ -1,1 +1,35 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --p5-red: #c40a0a;
+  --p5-red-dark: #8a0707;
+  --p5-black: #111111;
+  --p5-white: #ffffff;
+  --p5-yellow: #f2c200;
+  --p5-gray-text: #888888;
+
+  --font-display: 'Anton', sans-serif;
+  --font-body: 'Archivo', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  background-color: var(--p5-black);
+}
+
+h1,
+h2,
+h3,
+.display-text {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
