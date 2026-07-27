@@ -2,13 +2,13 @@ import {
   Component,
   OnInit,
   OnDestroy,
-  AfterViewChecked,
   AfterViewInit,
   ElementRef,
   ViewChild,
   ViewChildren,
   QueryList,
   signal,
+  effect,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -30,7 +30,7 @@ interface Connector {
   templateUrl: './chat-layout.html',
   styleUrl: './chat-layout.scss',
 })
-export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewChecked {
+export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('feedContainer') feedContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('bubblesWrap') bubblesWrap!: ElementRef<HTMLDivElement>;
   @ViewChildren('bubbleEl') bubbleEls!: QueryList<ElementRef<HTMLDivElement>>;
@@ -43,8 +43,8 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
   currentUserId: number;
 
   private currentConversationId: number | null = null;
-  private needsLineRecalc = false;
   private resizeObserver: ResizeObserver | null = null;
+  private viewReady = false;
 
   constructor(
     private conversationService: ConversationService,
@@ -53,6 +53,17 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
     private authService: AuthService
   ) {
     this.currentUserId = this.authService.currentUser()?.id ?? 0;
+
+    // effect() otomatis jalan ulang setiap kali signal messages() berubah,
+    // termasuk saat pertama kali di-set. Ini jaring pengaman utama,
+    // tidak bergantung sepenuhnya pada ResizeObserver.
+    effect(() => {
+      this.messages(); // baca signal supaya effect ini "subscribe" ke perubahannya
+      if (this.viewReady) {
+        // beri jeda 1 tick supaya DOM benar-benar sudah ter-render dulu
+        setTimeout(() => this.recalculateLine(), 0);
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -60,6 +71,8 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
   }
 
   ngAfterViewInit(): void {
+    this.viewReady = true;
+
     this.resizeObserver = new ResizeObserver(() => {
       this.recalculateLine();
     });
@@ -71,6 +84,8 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
     if (typeof document !== 'undefined' && 'fonts' in document) {
       document.fonts.ready.then(() => this.recalculateLine());
     }
+
+    this.recalculateLine();
   }
 
   ngOnDestroy(): void {
@@ -78,13 +93,6 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
       this.echoService.leaveConversation(this.currentConversationId);
     }
     this.resizeObserver?.disconnect();
-  }
-
-  ngAfterViewChecked(): void {
-    if (this.needsLineRecalc) {
-      this.recalculateLine();
-      this.needsLineRecalc = false;
-    }
   }
 
   loadConversations(): void {
@@ -106,7 +114,6 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
     this.messageService.getMessages(conversation.id).subscribe({
       next: (res) => {
         this.messages.set([...res.messages].reverse());
-        this.needsLineRecalc = true;
       },
     });
 
@@ -114,7 +121,6 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
 
     this.echoService.listenToConversation(conversation.id, (data: { message: Message }) => {
       this.messages.update((msgs) => [...msgs, data.message]);
-      this.needsLineRecalc = true;
       this.messageService.markAsRead(conversation.id).subscribe();
     });
   }
@@ -131,7 +137,6 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
       next: (res) => {
         this.messages.update((msgs) => [...msgs, res.data]);
         this.newMessageText.set('');
-        this.needsLineRecalc = true;
       },
     });
   }
@@ -162,13 +167,18 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit, AfterViewCh
 
   private recalculateLine(): void {
     requestAnimationFrame(() => {
-      if (!this.feedContainer || !this.bubbleEls || this.bubbleEls.length < 2) {
+      if (!this.feedContainer || !this.bubbleEls) {
+        return;
+      }
+
+      const els = this.bubbleEls.toArray();
+      if (els.length < 2) {
+        this.connectors.set([]);
         return;
       }
 
       const containerRect = this.feedContainer.nativeElement.getBoundingClientRect();
       const msgs = this.messages();
-      const els = this.bubbleEls.toArray();
       const nextConnectors: Connector[] = [];
 
       for (let i = 1; i < els.length; i++) {
