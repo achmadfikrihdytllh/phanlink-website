@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
 import { ConversationService } from '../../../core/services/conversation';
 import { MessageService } from '../../../core/services/message';
 import { EchoService } from '../../../core/services/echo';
@@ -26,13 +27,33 @@ interface Connector {
 
 @Component({
   selector: 'app-chat-layout',
+  standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './chat-layout.html',
   styleUrl: './chat-layout.scss',
 })
 export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
-  @ViewChild('feedContainer') feedContainer!: ElementRef<HTMLDivElement>;
-  @ViewChild('bubblesWrap') bubblesWrap!: ElementRef<HTMLDivElement>;
+  // PERBAIKAN 1: Gunakan setter untuk feedInner (sesuai dengan HTML baru)
+  private _feedInner?: ElementRef<HTMLDivElement>;
+  @ViewChild('feedInner') set feedInner(el: ElementRef<HTMLDivElement> | undefined) {
+    this._feedInner = el;
+  }
+  get feedInner(): ElementRef<HTMLDivElement> | undefined {
+    return this._feedInner;
+  }
+
+  // PERBAIKAN 2: Gunakan setter pada bubblesWrap agar observer diikat HANYA SAAT elemen muncul dari blok @if
+  private _bubblesWrap?: ElementRef<HTMLDivElement>;
+  @ViewChild('bubblesWrap') set bubblesWrap(el: ElementRef<HTMLDivElement> | undefined) {
+    if (el && el !== this._bubblesWrap) {
+      this.resizeObserver?.disconnect();
+      this.resizeObserver?.observe(el.nativeElement);
+    } else if (!el) {
+      this.resizeObserver?.disconnect();
+    }
+    this._bubblesWrap = el;
+  }
+
   @ViewChildren('bubbleEl') bubbleEls!: QueryList<ElementRef<HTMLDivElement>>;
 
   conversations = signal<Conversation[]>([]);
@@ -45,6 +66,7 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
   private currentConversationId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private viewReady = false;
+  private bubbleChangesSub?: Subscription;
 
   constructor(
     private conversationService: ConversationService,
@@ -54,13 +76,10 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
   ) {
     this.currentUserId = this.authService.currentUser()?.id ?? 0;
 
-    // effect() otomatis jalan ulang setiap kali signal messages() berubah,
-    // termasuk saat pertama kali di-set. Ini jaring pengaman utama,
-    // tidak bergantung sepenuhnya pada ResizeObserver.
+    // Effect memantau signal messages() untuk render garis
     effect(() => {
-      this.messages(); // baca signal supaya effect ini "subscribe" ke perubahannya
+      this.messages(); 
       if (this.viewReady) {
-        // beri jeda 1 tick supaya DOM benar-benar sudah ter-render dulu
         setTimeout(() => this.recalculateLine(), 0);
       }
     });
@@ -77,15 +96,14 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
       this.recalculateLine();
     });
 
-    if (this.bubblesWrap) {
-      this.resizeObserver.observe(this.bubblesWrap.nativeElement);
-    }
+    // PERBAIKAN 3: Dengarkan perubahan secara reaktif dari QueryList
+    this.bubbleChangesSub = this.bubbleEls.changes.subscribe(() => {
+      this.recalculateLine();
+    });
 
     if (typeof document !== 'undefined' && 'fonts' in document) {
       document.fonts.ready.then(() => this.recalculateLine());
     }
-
-    this.recalculateLine();
   }
 
   ngOnDestroy(): void {
@@ -93,6 +111,7 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
       this.echoService.leaveConversation(this.currentConversationId);
     }
     this.resizeObserver?.disconnect();
+    this.bubbleChangesSub?.unsubscribe();
   }
 
   loadConversations(): void {
@@ -142,7 +161,7 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
   }
 
   isMyMessage(message: Message): boolean {
-    return message.sender.id === this.currentUserId;
+    return message.sender?.id === this.currentUserId;
   }
 
   getOtherParticipantInitial(): string {
@@ -158,16 +177,20 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
     this.newMessageText.set(value);
   }
 
+  // PERBAIKAN 4: Sesuaikan titik anchor agar garis masuk sedikit ke dalam bubble (2px)
   private anchorPoint(el: HTMLElement, isMe: boolean, containerRect: DOMRect) {
     const rect = el.getBoundingClientRect();
-    const x = isMe ? rect.left - containerRect.left : rect.right - containerRect.left;
-    const y = rect.top - containerRect.top + rect.height / 2;
+    const x = isMe 
+      ? (rect.left - containerRect.left) + 2 
+      : (rect.right - containerRect.left) - 2;
+    const y = (rect.top - containerRect.top) + (rect.height / 2);
     return { x, y };
   }
 
   private recalculateLine(): void {
     requestAnimationFrame(() => {
-      if (!this.feedContainer || !this.bubbleEls) {
+      // Pastikan feedInner sudah tersedia
+      if (!this.feedInner || !this.bubbleEls) {
         return;
       }
 
@@ -177,7 +200,7 @@ export class ChatLayout implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
-      const containerRect = this.feedContainer.nativeElement.getBoundingClientRect();
+      const containerRect = this.feedInner.nativeElement.getBoundingClientRect();
       const msgs = this.messages();
       const nextConnectors: Connector[] = [];
 

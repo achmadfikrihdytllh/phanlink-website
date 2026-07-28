@@ -38,10 +38,13 @@
         <div class="chat-header-name">{{ conversation.name ?? 'Percakapan' }}</div>
       </div>
 
-      <div class="feed" #feedContainer>
-        <div class="feed-inner">
+      <!-- PERBAIKAN UTAMA: Hapus referensi dari .feed dan pindahkan ke .feed-inner -->
+      <div class="feed">
+        <!-- Acuan koordinat SVG dan Bubble sekarang berada di dalam feed-inner -->
+        <div class="feed-inner" #feedInner>
           <svg class="line-layer">
             @for (c of connectors(); track c.key) {
+              <!-- Styling path sudah di-handle oleh class .connector-path di SCSS -->
               <path [attr.d]="c.d" class="connector-path"></path>
             }
           </svg>
@@ -55,7 +58,7 @@
                 @if (!isMyMessage(msg)) {
                   <div class="avatar-wrap tiny">
                     <div class="avatar-shadow"></div>
-                    <div class="avatar">{{ msg.sender.name.charAt(0).toUpperCase() }}</div>
+                    <div class="avatar">{{ (msg.sender?.name?.charAt(0) ?? '?').toUpperCase() }}</div>
                   </div>
                 }
                 <div
