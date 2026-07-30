@@ -1,0 +1,24 @@
+// ============================================================
+// CONNECTOR — thick black zig-zag wire linking every bubble,
+// drawn as <path> elements computed in chat-layout.ts
+// (recalculateLine()).
+// ============================================================
+
+.connector-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.connector-path {
+    fill: none;
+    stroke: #0a0a0a;
+    stroke-width: 14;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0));
+}
