@@ -168,9 +168,8 @@ export class ChatLayout implements OnInit, AfterViewInit, OnDestroy {
 
     this.messageService.getMessages(conversation.id).subscribe({
 
-      next: (res: { messages: Message[] }) => {
-
-        this.messages.set([...res.messages].reverse());
+        next: (res) => {
+          this.messages.set([...res.messages].reverse());  
 
         queueMicrotask(() => {
 
@@ -235,7 +234,7 @@ export class ChatLayout implements OnInit, AfterViewInit, OnDestroy {
 
     }
 
-this.messageService.sendText(conversationId, body).subscribe({
+    this.messageService.sendText(conversationId, body).subscribe({
 
       next: (res: { data: Message }) => {
 

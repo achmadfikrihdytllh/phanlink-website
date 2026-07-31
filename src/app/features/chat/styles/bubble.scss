@@ -1,10 +1,3 @@
-// ============================================================
-// BUBBLE — jagged "flag" speech bubble, Persona 5 style.
-// Both directions share the same right-pointing flag shape;
-// "mine" bubbles are mirrored with scaleX(-1) so we only need
-// to maintain one clip-path.
-// ============================================================
-
 .message-row {
     display: flex;
     align-items: flex-end;
