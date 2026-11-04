@@ -1,0 +1,3909 @@
+From 1b8a8bd595729fd13d9c3ba584cad9e7f83d89c2 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 4 Nov 2026 13:28:08 +0700
+Subject: [PATCH] feat: build Phantom Messenger shell and six pages from design
+ mockup
+
+Add shell layout (rail + routed pages), shared icon and page-frame
+components, design tokens, and Messages/Settings/Groups/Saved/Contacts/
+Search pages. Messages uses the existing services; the other pages use
+local sample data until their APIs exist. Not yet built or type-checked.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013nAYnSuKh83gFwTMS3A7jm
+---
+ src/app/app.routes.ts                     |  55 ++-
+ src/app/core/mock/phantom-data.ts         | 111 ++++++
+ src/app/features/contacts/contacts.html   | 145 ++++++++
+ src/app/features/contacts/contacts.scss   | 224 ++++++++++++
+ src/app/features/contacts/contacts.ts     |  43 +++
+ src/app/features/groups/groups.html       | 132 +++++++
+ src/app/features/groups/groups.scss       | 155 ++++++++
+ src/app/features/groups/groups.ts         |  35 ++
+ src/app/features/messages/messages.html   | 157 +++++++++
+ src/app/features/messages/messages.scss   | 407 ++++++++++++++++++++++
+ src/app/features/messages/messages.ts     | 162 +++++++++
+ src/app/features/saved/saved.html         | 108 ++++++
+ src/app/features/saved/saved.scss         | 195 +++++++++++
+ src/app/features/saved/saved.ts           |  56 +++
+ src/app/features/search/search.html       | 136 ++++++++
+ src/app/features/search/search.scss       | 224 ++++++++++++
+ src/app/features/search/search.ts         |  70 ++++
+ src/app/features/settings/settings.html   | 194 +++++++++++
+ src/app/features/settings/settings.scss   | 150 ++++++++
+ src/app/features/settings/settings.ts     |  98 ++++++
+ src/app/features/shell/shell.html         |  45 +++
+ src/app/features/shell/shell.scss         | 135 +++++++
+ src/app/features/shell/shell.ts           |  31 ++
+ src/app/shared/icon/icon.ts               | 103 ++++++
+ src/app/shared/page-frame/page-frame.scss | 127 +++++++
+ src/app/shared/page-frame/page-frame.ts   |  51 +++
+ src/index.html                            |   2 +-
+ src/styles.scss                           | 303 ++++++++++++++++
+ 28 files changed, 3638 insertions(+), 16 deletions(-)
+ create mode 100644 src/app/core/mock/phantom-data.ts
+ create mode 100644 src/app/features/contacts/contacts.html
+ create mode 100644 src/app/features/contacts/contacts.scss
+ create mode 100644 src/app/features/contacts/contacts.ts
+ create mode 100644 src/app/features/groups/groups.html
+ create mode 100644 src/app/features/groups/groups.scss
+ create mode 100644 src/app/features/groups/groups.ts
+ create mode 100644 src/app/features/messages/messages.html
+ create mode 100644 src/app/features/messages/messages.scss
+ create mode 100644 src/app/features/messages/messages.ts
+ create mode 100644 src/app/features/saved/saved.html
+ create mode 100644 src/app/features/saved/saved.scss
+ create mode 100644 src/app/features/saved/saved.ts
+ create mode 100644 src/app/features/search/search.html
+ create mode 100644 src/app/features/search/search.scss
+ create mode 100644 src/app/features/search/search.ts
+ create mode 100644 src/app/features/settings/settings.html
+ create mode 100644 src/app/features/settings/settings.scss
+ create mode 100644 src/app/features/settings/settings.ts
+ create mode 100644 src/app/features/shell/shell.html
+ create mode 100644 src/app/features/shell/shell.scss
+ create mode 100644 src/app/features/shell/shell.ts
+ create mode 100644 src/app/shared/icon/icon.ts
+ create mode 100644 src/app/shared/page-frame/page-frame.scss
+ create mode 100644 src/app/shared/page-frame/page-frame.ts
+
+diff --git a/src/app/app.routes.ts b/src/app/app.routes.ts
+index a50c26a..f78927c 100644
+--- a/src/app/app.routes.ts
++++ b/src/app/app.routes.ts
+@@ -13,20 +13,45 @@ export const routes: Routes = [
+       import('./features/auth/register/register').then((m) => m.Register),
+   },
+   {
+-    path: 'chat',
+-    loadComponent: () =>
+-      import('./features/chat/chat-layout').then(
+-        (m) => m.ChatLayout
+-      ),
+-    canActivate: [authGuard],
+-  },
+-  {
++    // Phantom Messenger shell: rail + one page per section.
+     path: '',
+-    redirectTo: 'chat',
+-    pathMatch: 'full',
+-  },
+-  {
+-    path: '**',
+-    redirectTo: 'chat',
++    loadComponent: () => import('./features/shell/shell').then((m) => m.Shell),
++    canActivate: [authGuard],
++    children: [
++      {
++        path: 'messages',
++        loadComponent: () =>
++          import('./features/messages/messages').then((m) => m.Messages),
++      },
++      {
++        path: 'settings',
++        loadComponent: () =>
++          import('./features/settings/settings').then((m) => m.Settings),
++      },
++      {
++        path: 'groups',
++        loadComponent: () =>
++          import('./features/groups/groups').then((m) => m.Groups),
++      },
++      {
++        path: 'saved',
++        loadComponent: () =>
++          import('./features/saved/saved').then((m) => m.Saved),
++      },
++      {
++        path: 'contacts',
++        loadComponent: () =>
++          import('./features/contacts/contacts').then((m) => m.Contacts),
++      },
++      {
++        path: 'search',
++        loadComponent: () =>
++          import('./features/search/search').then((m) => m.Search),
++      },
++      { path: '', redirectTo: 'messages', pathMatch: 'full' },
++    ],
+   },
+-];
+\ No newline at end of file
++  // Old URL kept alive so existing bookmarks still land somewhere sensible.
++  { path: 'chat', redirectTo: 'messages' },
++  { path: '**', redirectTo: 'messages' },
++];
+diff --git a/src/app/core/mock/phantom-data.ts b/src/app/core/mock/phantom-data.ts
+new file mode 100644
+index 0000000..1516511
+--- /dev/null
++++ b/src/app/core/mock/phantom-data.ts
+@@ -0,0 +1,111 @@
++/**
++ * Local sample data for the pages that have no backend endpoint yet
++ * (Groups, Saved, Contacts, Search). Swap each export for a service call
++ * when the matching API exists; the page templates only depend on these shapes.
++ */
++
++export interface Confidant {
++  id: number;
++  name: string;
++  codename: string;
++  handle: string;
++  school: string;
++  status: 'online' | 'offline';
++  note: string;
++  lastSeen: string;
++}
++
++export interface SharedFile {
++  name: string;
++  meta: string;
++  kind: 'file' | 'image' | 'calendar' | 'map';
++}
++
++export interface Group {
++  id: number;
++  name: string;
++  members: number;
++  online: number;
++  blurb: string;
++}
++
++export interface SavedMessage {
++  id: number;
++  author: string;
++  group: string;
++  time: string;
++  body: string;
++  collection: string;
++  day: 'today' | 'yesterday';
++  attachment?: SharedFile;
++}
++
++export const CONFIDANTS: Confidant[] = [
++  { id: 1, name: 'Ryuji Sakamoto', codename: 'Skull', handle: '@skull', school: 'Shujin Academy', status: 'online', note: 'Online · Ready for ramen', lastSeen: 'Online' },
++  { id: 2, name: 'Ann Takamaki', codename: 'Panther', handle: '@panther', school: 'Shujin Academy', status: 'online', note: 'Online · In the hideout', lastSeen: 'Online' },
++  { id: 3, name: 'Makoto Niijima', codename: 'Queen', handle: '@queen', school: 'Shujin Academy', status: 'online', note: 'Online · Reviewing notes', lastSeen: 'Online' },
++  { id: 4, name: 'Futaba Sakura', codename: 'Oracle', handle: '@oracle', school: 'Home', status: 'offline', note: 'Last seen at 13:22', lastSeen: 'Last seen at 13:22' },
++  { id: 5, name: 'Yusuke Kitagawa', codename: 'Fox', handle: '@fox', school: 'Kosei Arts', status: 'offline', note: 'Last seen yesterday', lastSeen: 'Last seen yesterday' },
++  { id: 6, name: 'Morgana', codename: 'Mona', handle: '@mona', school: 'Leblanc', status: 'online', note: 'Online · Laying low', lastSeen: 'Online' },
++];
++
++export const GROUPS: Group[] = [
++  { id: 1, name: 'The Phantom Thieves', members: 7, online: 4, blurb: 'Ryuji: Okay, okay. I’ll be there!' },
++  { id: 2, name: 'Leblanc regulars', members: 4, online: 1, blurb: 'Coffee, curry, and a place to lay low.' },
++  { id: 3, name: 'Operation: snack run', members: 3, online: 0, blurb: 'Futaba: Operation is a go.' },
++  { id: 4, name: 'After-school plans', members: 5, online: 2, blurb: 'Ann: See you after class!' },
++];
++
++export const GROUP_FILES: SharedFile[] = [
++  { name: 'Tomorrow’s game plan.pdf', meta: 'Makoto · 2.4 MB · Today', kind: 'file' },
++  { name: 'Hideout route.png', meta: 'Ryuji · 680 KB · Yesterday', kind: 'image' },
++];
++
++export const SAVED: SavedMessage[] = [
++  {
++    id: 1, author: 'Ann Takamaki', group: 'The Phantom Thieves', time: 'Today, 16:42',
++    body: 'So, Leblanc at five? I’m claiming the booth. We need a proper game plan for tomorrow.',
++    collection: 'Plans & operations', day: 'today',
++  },
++  {
++    id: 2, author: 'Makoto Niijima', group: 'The Phantom Thieves', time: 'Today, 16:43',
++    body: 'I’ll bring my notes. Let’s go over the route together before we make our next move.',
++    collection: 'Plans & operations', day: 'today',
++    attachment: { name: 'Tomorrow’s game plan.pdf', meta: 'PDF · 2.4 MB · Plans & operations', kind: 'file' },
++  },
++  {
++    id: 3, author: 'Ryuji Sakamoto', group: 'The Phantom Thieves', time: 'Today, 16:32',
++    body: 'You up for ramen after this?', collection: 'Places to go', day: 'today',
++  },
++  {
++    id: 4, author: 'Yusuke Kitagawa', group: 'The Phantom Thieves', time: 'Yesterday, 19:20',
++    body: 'A most inspiring afternoon. We should visit the gallery again when we have a moment.',
++    collection: 'Links & inspiration', day: 'yesterday',
++  },
++];
++
++export const COLLECTIONS = [
++  { name: 'All saved messages', count: 12 },
++  { name: 'Plans & operations', count: 4 },
++  { name: 'Places to go', count: 3 },
++  { name: 'Photos', count: 3 },
++  { name: 'Links & inspiration', count: 2 },
++];
++
++export interface SearchHit {
++  id: number;
++  author: string;
++  where: string;
++  time: string;
++  body: string;
++  kind: 'message' | 'file';
++}
++
++export const SEARCH_HITS: SearchHit[] = [
++  { id: 1, author: 'Ann Takamaki', where: 'The Phantom Thieves', time: 'Today, 16:42', body: 'So, Leblanc at five? I’m claiming the booth. We need a proper game plan for tomorrow.', kind: 'message' },
++  { id: 2, author: 'Ren Amamiya', where: 'The Phantom Thieves', time: 'Today, 16:40', body: 'Meet at Leblanc. 17:00. Don’t be late.', kind: 'message' },
++  { id: 3, author: 'Ryuji Sakamoto', where: 'Direct message', time: 'Today, 16:35', body: 'Alright, Leblanc first. Ramen after. That’s a plan!', kind: 'message' },
++  { id: 4, author: 'Makoto Niijima', where: 'The Phantom Thieves', time: 'Yesterday, 18:08', body: 'I’ve checked the route. We can go over it at Leblanc tomorrow.', kind: 'message' },
++  { id: 5, author: 'Ann', where: 'The Phantom Thieves · Today, 16:45', body: 'Leblanc meetup.ics', kind: 'file' },
++  { id: 6, author: 'Makoto', where: 'Leblanc regulars · Oct 23, 18:06', body: 'Leblanc directions.png', kind: 'file' },
++];
+diff --git a/src/app/features/contacts/contacts.html b/src/app/features/contacts/contacts.html
+new file mode 100644
+index 0000000..acce00f
+--- /dev/null
++++ b/src/app/features/contacts/contacts.html
+@@ -0,0 +1,145 @@
++<pm-page-frame listTone="dark">
++  <div slot="list">
++    <header class="pm-list-head">
++      <h1 class="pm-title">Contacts</h1>
++      <button class="pm-icon-btn add" type="button" aria-label="Invite a confidant">
++        <pm-icon name="plus" [size]="12" />
++      </button>
++    </header>
++    <label class="pm-search">
++      <pm-icon name="search" [size]="11" />
++      <input
++        type="text"
++        placeholder="Find your confidants"
++        [value]="query()"
++        (input)="query.set($any($event.target).value)"
++      />
++    </label>
++    <div class="filters">
++      <button type="button" [class.on]="filter() === 'all'" (click)="filter.set('all')">
++        All {{ contacts.length }}
++      </button>
++      <button type="button" [class.on]="filter() === 'online'" (click)="filter.set('online')">
++        Online {{ onlineCount }}
++      </button>
++    </div>
++    <ul class="items">
++      @for (c of visible(); track c.id) {
++        <li>
++          <button
++            type="button"
++            class="pm-list-item"
++            [class.active]="c.id === selectedId()"
++            (click)="selectedId.set(c.id)"
++          >
++            <span class="pm-avatar pm-avatar--light">{{ c.name.charAt(0) }}</span>
++            <span class="pm-list-item__text">
++              <strong>{{ c.name }}</strong>
++              <small>{{ c.note }}</small>
++            </span>
++            @if (c.status === 'online') {
++              <i class="dot"></i>
++            }
++          </button>
++        </li>
++      }
++    </ul>
++    <button type="button" class="invite">+ Invite a confidant</button>
++  </div>
++
++  <div slot="main" class="page">
++    <header class="pm-hero">
++      <div>
++        <div class="pm-eyebrow">Your confidants / Contact details</div>
++        <h2 class="pm-title">{{ selected().name }}</h2>
++      </div>
++      <div class="actions">
++        <button type="button" class="pm-btn pm-btn--dark"><span>Call</span></button>
++        <a class="pm-btn" routerLink="/messages"><span>Message</span></a>
++      </div>
++    </header>
++
++    <div class="profile">
++      <span class="pm-avatar pm-avatar--lg">{{ selected().name.charAt(0) }}</span>
++      <div>
++        <div class="pm-eyebrow code">Codename / {{ selected().codename }}</div>
++        <h2 class="pm-title">{{ selected().name }}</h2>
++        <small>{{ selected().handle }} · {{ selected().school }}</small>
++        <small class="status">{{ selected().status === 'online' ? 'Online · Ready for ramen' : selected().lastSeen }}</small>
++      </div>
++    </div>
++
++    <nav class="pm-tabs">
++      @for (t of tabs; track t) {
++        <button type="button" [class.on]="tab() === t" (click)="tab.set(t)">{{ t }}</button>
++      }
++    </nav>
++
++    <div class="pane pm-scroll">
++      <div class="paper">
++        <div class="pm-eyebrow">About</div>
++        <blockquote class="pm-title">“Got your back. Always.”</blockquote>
++        <p>Track team energy. Phantom Thief loyalty. Probably thinking about the next bowl of ramen.</p>
++
++        <div class="stats">
++          <div><span class="pm-label">Confidant since</span><strong>October 01</strong></div>
++          <div><span class="pm-label">Groups in common</span><strong>0{{ groups.length }} groups</strong></div>
++          <div><span class="pm-label">Message preference</span><strong>Direct messages</strong></div>
++        </div>
++      </div>
++
++      <div class="exchange">
++        <div class="pm-eyebrow">Last exchange / Today</div>
++        <div class="msg"><small>{{ selected().codename }}</small>You up for ramen after this?</div>
++        <div class="msg msg--me"><small>You</small>After Leblanc. Let’s get the plan sorted first.</div>
++      </div>
++
++      <label class="note">
++        <span class="pm-label">Personal note / Only you</span>
++        <input
++          class="pm-input"
++          [value]="note()"
++          (input)="note.set($any($event.target).value)"
++        />
++      </label>
++    </div>
++  </div>
++
++  <div slot="aside">
++    <section class="pm-section">
++      <div class="pm-eyebrow">Confidant dossier</div>
++      <h2 class="pm-title">Shared intel</h2>
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Groups in common / 0{{ groups.length }}</div>
++      @for (g of groups; track g.id) {
++        <a class="group" routerLink="/groups">
++          <span class="pm-avatar pm-avatar--light">{{ g.name.charAt(0) }}</span>
++          <span><strong>{{ g.name }}</strong><small>{{ g.members }} members</small></span>
++        </a>
++      }
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Shared files / 0{{ files.length }}</div>
++      @for (f of files; track f.name) {
++        <div class="group">
++          <pm-icon [name]="f.kind === 'image' ? 'image' : 'file'" [size]="12" />
++          <span><strong>{{ f.name }}</strong><small>{{ f.meta }}</small></span>
++        </div>
++      }
++    </section>
++    <section class="pm-section">
++      <div class="pref">
++        Mute notifications
++        <button
++          type="button"
++          class="pm-toggle"
++          [class.on]="muted()"
++          (click)="muted.set(!muted())"
++          aria-label="Mute notifications"
++        ></button>
++      </div>
++      <button type="button" class="block">Block contact</button>
++    </section>
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/contacts/contacts.scss b/src/app/features/contacts/contacts.scss
+new file mode 100644
+index 0000000..947203e
+--- /dev/null
++++ b/src/app/features/contacts/contacts.scss
+@@ -0,0 +1,224 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.page {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++}
++
++.add {
++  background: var(--pm-ink-3);
++}
++
++.filters {
++  display: flex;
++  gap: 4px;
++  padding: 10px 16px;
++
++  button {
++    padding: 4px 7px;
++    background: transparent;
++    color: #fff;
++    border: 1px solid var(--pm-line);
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++    cursor: pointer;
++
++    &.on {
++      background: var(--pm-red);
++      border-color: var(--pm-red);
++    }
++  }
++}
++
++.items {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.dot {
++  width: 5px;
++  height: 5px;
++  background: var(--pm-red);
++}
++
++.invite {
++  margin: 14px 16px;
++  padding: 0;
++  background: transparent;
++  border: 0;
++  color: var(--pm-red);
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++  text-align: left;
++  cursor: pointer;
++}
++
++.actions {
++  display: flex;
++  gap: 8px;
++
++  a {
++    text-decoration: none;
++  }
++}
++
++.profile {
++  display: flex;
++  align-items: center;
++  gap: 18px;
++  padding: 20px 22px;
++  background: var(--pm-red);
++
++  h2 {
++    font-size: 30px;
++    margin: 4px 0;
++  }
++
++  small {
++    display: block;
++    font-size: 8px;
++  }
++
++  .code {
++    color: #fff;
++    opacity: 0.8;
++  }
++
++  .status {
++    margin-top: 4px;
++    font-weight: 700;
++  }
++}
++
++.pane {
++  flex: 1;
++  min-height: 0;
++  padding: 18px 22px;
++  background: var(--pm-paper);
++  color: var(--pm-ink);
++  display: flex;
++  flex-direction: column;
++  gap: 16px;
++}
++
++.paper {
++  blockquote {
++    margin: 8px 0;
++    font-size: 22px;
++  }
++
++  p {
++    margin: 0 0 14px;
++    font-size: 9px;
++    color: #55555c;
++  }
++}
++
++.stats {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 10px;
++
++  div {
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++    padding: 10px;
++    background: #fff;
++    border: 1px solid var(--pm-line-dark);
++  }
++
++  strong {
++    font-size: 9px;
++  }
++}
++
++.exchange {
++  padding: 14px;
++  background: var(--pm-ink);
++  color: #fff;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++}
++
++.msg {
++  font-size: 9px;
++  display: flex;
++  flex-direction: column;
++  gap: 3px;
++
++  small {
++    font: 800 6px/1 var(--pm-font-ui);
++    letter-spacing: 0.12em;
++    text-transform: uppercase;
++    color: var(--pm-red);
++  }
++
++  &--me small {
++    color: var(--pm-muted);
++  }
++}
++
++.note {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++
++  .pm-input {
++    background: #fff;
++    color: var(--pm-ink);
++    border-color: var(--pm-line-dark);
++  }
++}
++
++.group {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  margin-top: 10px;
++  color: inherit;
++  text-decoration: none;
++
++  span:last-child {
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++  }
++
++  strong {
++    font-size: 8px;
++  }
++
++  small {
++    font-size: 7px;
++    color: var(--pm-muted);
++  }
++}
++
++.pref {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  font-size: 9px;
++}
++
++.block {
++  margin-top: 12px;
++  padding: 0;
++  background: transparent;
++  border: 0;
++  color: var(--pm-red);
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++  cursor: pointer;
++}
+diff --git a/src/app/features/contacts/contacts.ts b/src/app/features/contacts/contacts.ts
+new file mode 100644
+index 0000000..5bde039
+--- /dev/null
++++ b/src/app/features/contacts/contacts.ts
+@@ -0,0 +1,43 @@
++import { Component, computed, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++
++import { CONFIDANTS, GROUPS, GROUP_FILES, Confidant } from '../../core/mock/phantom-data';
++import { PmIcon } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++type Filter = 'all' | 'online';
++
++@Component({
++  selector: 'app-contacts',
++  imports: [RouterLink, PmIcon, PageFrame],
++  templateUrl: './contacts.html',
++  styleUrl: './contacts.scss',
++})
++export class Contacts {
++  readonly contacts = CONFIDANTS;
++  readonly groups = GROUPS.slice(0, 3);
++  readonly files = GROUP_FILES;
++  readonly tabs = ['Profile', 'Media', 'Links'];
++
++  filter = signal<Filter>('all');
++  query = signal('');
++  selectedId = signal(CONFIDANTS[0].id);
++  tab = signal('Profile');
++  muted = signal(false);
++  note = signal('Ask about track practice. And the ramen place near Shibuya.');
++
++  onlineCount = this.contacts.filter((c) => c.status === 'online').length;
++
++  visible = computed(() => {
++    const q = this.query().trim().toLowerCase();
++    return this.contacts.filter(
++      (c) =>
++        (this.filter() === 'all' || c.status === 'online') &&
++        (!q || `${c.name} ${c.codename}`.toLowerCase().includes(q)),
++    );
++  });
++
++  selected = computed<Confidant>(
++    () => this.contacts.find((c) => c.id === this.selectedId()) ?? this.contacts[0],
++  );
++}
+diff --git a/src/app/features/groups/groups.html b/src/app/features/groups/groups.html
+new file mode 100644
+index 0000000..c7b0271
+--- /dev/null
++++ b/src/app/features/groups/groups.html
+@@ -0,0 +1,132 @@
++<pm-page-frame listTone="dark">
++  <div slot="list">
++    <header class="pm-list-head">
++      <h1 class="pm-title">Groups</h1>
++      <button class="pm-icon-btn add" type="button" aria-label="New group">
++        <pm-icon name="plus" [size]="12" />
++      </button>
++    </header>
++    <label class="pm-search">
++      <pm-icon name="search" [size]="11" />
++      <input
++        type="text"
++        placeholder="Find your hideout"
++        [value]="query()"
++        (input)="query.set($any($event.target).value)"
++      />
++    </label>
++    <div class="pm-eyebrow label">Your groups {{ groups.length }}</div>
++    <ul class="items">
++      @for (g of visible(); track g.id) {
++        <li>
++          <button
++            type="button"
++            class="pm-list-item"
++            [class.active]="g.id === selectedId()"
++            (click)="select(g)"
++          >
++            <span class="pm-avatar pm-avatar--light">{{ g.name.charAt(0) }}</span>
++            <span class="pm-list-item__text">
++              <strong>{{ g.name }}</strong>
++              <small>{{ g.members }} members</small>
++              <small>{{ g.blurb }}</small>
++            </span>
++          </button>
++        </li>
++      }
++    </ul>
++  </div>
++
++  <div slot="main" class="page">
++    <header class="pm-hero">
++      <div>
++        <div class="pm-eyebrow">Your groups / The hideout</div>
++        <h2 class="pm-title">{{ selected().name }}</h2>
++      </div>
++      <a class="pm-btn" routerLink="/messages"><span>Open chat</span></a>
++    </header>
++
++    <div class="banner">
++      <pm-icon name="star" [size]="34" />
++      <div>
++        <div class="pm-eyebrow banner__eyebrow">Steal hearts. Stay connected.</div>
++        <h2 class="pm-title">All together now.</h2>
++        <small>{{ selected().members }} members · {{ selected().online }} online · Private group</small>
++      </div>
++    </div>
++
++    <div class="pm-pane pm-scroll">
++      <section class="pm-card meetup">
++        <span class="meetup__time">17:00<small>Today</small></span>
++        <div>
++          <div class="pm-eyebrow">Pinned / Next meetup</div>
++          <h3 class="pm-title">Café Leblanc</h3>
++          <small>Meet at Leblanc, 17:00. Don’t be late. Our usual booth.</small>
++        </div>
++      </section>
++
++      <section class="pm-card">
++        <div class="pm-eyebrow">Your confidants / {{ members.length }}</div>
++        <ul class="members">
++          @for (m of members; track m.id) {
++            <li>
++              <span class="pm-avatar pm-avatar--light">{{ m.name.charAt(0) }}</span>
++              <strong>{{ m.name }}</strong>
++              <span class="code">{{ m.codename }}</span>
++              <span class="state" [class.state--on]="m.status === 'online'">
++                {{ m.status === 'online' ? 'Online' : m.lastSeen }}
++              </span>
++            </li>
++          }
++        </ul>
++      </section>
++    </div>
++  </div>
++
++  <div slot="aside">
++    <section class="pm-section">
++      <div class="pm-eyebrow">The inner circle</div>
++      <h2 class="pm-title">Group intel</h2>
++      <p>A place for the crew to plan our next move. No strangers. No spoilers. Don’t be late.</p>
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Group preferences</div>
++      <div class="pref">
++        Notifications
++        <button
++          type="button"
++          class="pm-toggle"
++          [class.on]="notifications()"
++          (click)="notifications.set(!notifications())"
++          aria-label="Notifications"
++        ></button>
++      </div>
++      <div class="pref">
++        Pin to messages
++        <button
++          type="button"
++          class="pm-toggle"
++          [class.on]="pinToMessages()"
++          (click)="pinToMessages.set(!pinToMessages())"
++          aria-label="Pin to messages"
++        ></button>
++      </div>
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Shared intel / {{ files.length }} files</div>
++      @for (f of files; track f.name) {
++        <div class="file">
++          <pm-icon [name]="f.kind === 'image' ? 'image' : 'file'" [size]="12" />
++          <span>
++            <strong>{{ f.name }}</strong>
++            <small>{{ f.meta }}</small>
++          </span>
++          <pm-icon name="download" [size]="11" />
++        </div>
++      }
++    </section>
++    <section class="pm-section actions">
++      <button type="button" class="pm-btn"><span>Invite a confidant</span></button>
++    </section>
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/groups/groups.scss b/src/app/features/groups/groups.scss
+new file mode 100644
+index 0000000..f1b7728
+--- /dev/null
++++ b/src/app/features/groups/groups.scss
+@@ -0,0 +1,155 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.page {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++
++  .pm-pane {
++    flex: 1;
++    min-height: 0;
++  }
++}
++
++.label {
++  padding: 14px 16px 6px;
++}
++
++.items {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.add {
++  background: var(--pm-ink-3);
++}
++
++.banner {
++  display: flex;
++  align-items: center;
++  gap: 18px;
++  padding: 22px;
++  background: var(--pm-red);
++
++  h2 {
++    font-size: 34px;
++    margin: 4px 0 6px;
++  }
++
++  small {
++    font-size: 8px;
++  }
++
++  &__eyebrow {
++    color: #fff;
++    opacity: 0.8;
++  }
++}
++
++.meetup {
++  display: flex;
++  align-items: center;
++  gap: 14px;
++
++  &__time {
++    display: flex;
++    flex-direction: column;
++    align-items: center;
++    padding: 8px 10px;
++    background: var(--pm-red);
++    font: 800 15px/1 var(--pm-font-ui);
++
++    small {
++      margin-top: 3px;
++      font-size: 6px;
++      letter-spacing: 0.12em;
++      text-transform: uppercase;
++    }
++  }
++
++  h3 {
++    margin: 4px 0;
++    font-size: 16px;
++  }
++
++  small {
++    font-size: 8px;
++    color: var(--pm-muted);
++  }
++}
++
++.members {
++  list-style: none;
++  margin: 10px 0 0;
++  padding: 0;
++
++  li {
++    display: grid;
++    grid-template-columns: 22px 1fr 80px 110px;
++    align-items: center;
++    gap: 10px;
++    padding: 8px 0;
++    border-top: 1px solid var(--pm-line);
++    font-size: 9px;
++  }
++
++  .code {
++    font: 700 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++    color: var(--pm-muted);
++  }
++
++  .state {
++    font-size: 8px;
++    color: var(--pm-muted);
++
++    &--on {
++      color: var(--pm-red);
++    }
++  }
++}
++
++.pref {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  margin-top: 10px;
++  font-size: 9px;
++}
++
++.file {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  margin-top: 10px;
++  padding: 8px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++
++  span {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++  }
++
++  strong {
++    font-size: 8px;
++  }
++
++  small {
++    font-size: 7px;
++    color: var(--pm-muted);
++  }
++}
++
++.actions {
++  border-bottom: 0;
++}
+diff --git a/src/app/features/groups/groups.ts b/src/app/features/groups/groups.ts
+new file mode 100644
+index 0000000..584e224
+--- /dev/null
++++ b/src/app/features/groups/groups.ts
+@@ -0,0 +1,35 @@
++import { Component, computed, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++
++import { CONFIDANTS, GROUPS, GROUP_FILES, Group } from '../../core/mock/phantom-data';
++import { PmIcon } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++@Component({
++  selector: 'app-groups',
++  imports: [RouterLink, PmIcon, PageFrame],
++  templateUrl: './groups.html',
++  styleUrl: './groups.scss',
++})
++export class Groups {
++  groups = GROUPS;
++  members = CONFIDANTS;
++  files = GROUP_FILES;
++
++  selectedId = signal(GROUPS[0].id);
++  query = signal('');
++
++  selected = computed<Group>(() => this.groups.find((g) => g.id === this.selectedId()) ?? this.groups[0]);
++
++  visible = computed(() => {
++    const q = this.query().trim().toLowerCase();
++    return q ? this.groups.filter((g) => g.name.toLowerCase().includes(q)) : this.groups;
++  });
++
++  notifications = signal(true);
++  pinToMessages = signal(true);
++
++  select(g: Group): void {
++    this.selectedId.set(g.id);
++  }
++}
+diff --git a/src/app/features/messages/messages.html b/src/app/features/messages/messages.html
+new file mode 100644
+index 0000000..cc0a181
+--- /dev/null
++++ b/src/app/features/messages/messages.html
+@@ -0,0 +1,157 @@
++<pm-page-frame>
++  <!-- LIST -->
++  <div slot="list" class="list">
++    <header class="list__head">
++      <h1 class="pm-title list__title">Messages</h1>
++      <button class="icon-btn" type="button" aria-label="New message">
++        <pm-icon name="compose" [size]="12" />
++      </button>
++    </header>
++
++    <label class="search">
++      <pm-icon name="search" [size]="11" />
++      <input
++        type="text"
++        placeholder="Find your confidants"
++        [ngModel]="query()"
++        (ngModelChange)="query.set($event)"
++      />
++    </label>
++
++    <div class="tabs">
++      <span class="tabs__tab tabs__tab--on">All {{ conversations().length }}</span>
++    </div>
++
++    <div class="pm-eyebrow list__label">Your confidants</div>
++
++    <ul class="convos pm-scroll">
++      @for (c of filtered(); track c.id) {
++        <li>
++          <button
++            type="button"
++            class="convo"
++            [class.convo--active]="selected()?.id === c.id"
++            (click)="open(c)"
++          >
++            <span class="avatar">{{ initial(c.name) }}</span>
++            <span class="convo__text">
++              <strong>{{ c.name ?? 'Conversation' }}</strong>
++              <small>{{ previewOf(c) }}</small>
++            </span>
++            @if (c.latest_message; as last) {
++              <time class="convo__time">{{ last.created_at | date: 'HH:mm' }}</time>
++            }
++          </button>
++        </li>
++      } @empty {
++        <li class="empty">No conversations found.</li>
++      }
++    </ul>
++  </div>
++
++  <!-- MAIN -->
++  <div slot="main" class="chat">
++    @if (selected(); as convo) {
++      <header class="chat__head">
++        <span class="avatar avatar--lg">{{ initial(convo.name) }}</span>
++        <div class="chat__who">
++          <h2 class="pm-title">{{ convo.name }}</h2>
++          <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
++        </div>
++        <div class="chat__tools">
++          <pm-icon name="phone" [size]="13" />
++          <pm-icon name="search" [size]="13" />
++        </div>
++      </header>
++
++      <div class="feed pm-scroll" #feed>
++        @if (loading()) {
++          <p class="feed__note">Loading…</p>
++        }
++
++        @for (m of messages(); track m.id) {
++          <div class="row" [class.row--mine]="isMine(m)">
++            <span class="row__meta">
++              {{ isMine(m) ? 'You' : m.sender.name }}
++              <time>{{ m.created_at | date: 'HH:mm' }}</time>
++            </span>
++            <div class="row__line">
++              @if (!isMine(m)) {
++                <span class="avatar">{{ initial(m.sender.name) }}</span>
++              }
++              <p class="bubble">{{ m.body }}</p>
++            </div>
++          </div>
++        } @empty {
++          @if (!loading()) {
++            <p class="feed__note">No messages yet. Make the first move.</p>
++          }
++        }
++      </div>
++
++      <footer class="composer">
++        <span class="pm-eyebrow composer__label">Your next move.</span>
++        <div class="composer__box">
++          <input
++            type="text"
++            [placeholder]="'Message ' + convo.name"
++            [ngModel]="draft()"
++            (ngModelChange)="draft.set($event)"
++            (keydown.enter)="send()"
++          />
++          <button class="pm-btn" type="button" (click)="send()">
++            <span>Send</span>
++          </button>
++        </div>
++        <small class="composer__hint">Enter to send</small>
++      </footer>
++    } @else {
++      <div class="chat__empty">
++        <h2 class="pm-title">Phanlink</h2>
++        <p>Pick a confidant to start talking.</p>
++      </div>
++    }
++  </div>
++
++  <!-- ASIDE -->
++  <div slot="aside" class="intel">
++    @if (selected(); as convo) {
++      <div class="intel__section">
++        <div class="pm-eyebrow">The inner circle</div>
++        <h2 class="pm-title intel__title">Crew intel</h2>
++      </div>
++
++      <div class="intel__section">
++        <div class="pm-eyebrow">In the hideout · {{ onlineCount() }} online</div>
++        <ul class="members">
++          @for (p of convo.participants; track p.id) {
++            <li>
++              <span class="avatar">{{ initial(p.name) }}</span>
++              <span class="members__text">
++                <strong>{{ p.name }}</strong>
++                <small>{{ p.role === 'admin' ? 'Leader' : p.status }}</small>
++              </span>
++              <i class="dot" [class.dot--on]="p.status === 'online'"></i>
++            </li>
++          }
++        </ul>
++      </div>
++
++      <div class="intel__section">
++        <div class="pm-eyebrow">Shared intel</div>
++        @for (f of sharedFiles(); track f.id) {
++          <div class="file">
++            <pm-icon name="file" [size]="12" />
++            <span class="file__text">
++              <strong>{{ fileName(f.file_path) }}</strong>
++              <small>{{ size(f.file_size) }}</small>
++            </span>
++            <pm-icon name="download" [size]="11" />
++          </div>
++        } @empty {
++          <p class="intel__empty">Nothing shared yet.</p>
++        }
++      </div>
++    }
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/messages/messages.scss b/src/app/features/messages/messages.scss
+new file mode 100644
+index 0000000..2ad975f
+--- /dev/null
++++ b/src/app/features/messages/messages.scss
+@@ -0,0 +1,407 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.avatar {
++  flex: none;
++  width: 22px;
++  height: 22px;
++  display: grid;
++  place-items: center;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 1px solid var(--pm-ink);
++  font: 800 10px/1 var(--pm-font-ui);
++
++  &--lg {
++    width: 30px;
++    height: 30px;
++    font-size: 13px;
++    background: #fff;
++    color: var(--pm-ink);
++  }
++}
++
++/* ---------- list ---------- */
++.list {
++  display: flex;
++  flex-direction: column;
++  min-height: 0;
++  flex: 1;
++
++  &__head {
++    display: flex;
++    align-items: center;
++    justify-content: space-between;
++    padding: 18px 16px 10px;
++  }
++
++  &__title {
++    font-size: 26px;
++  }
++
++  &__label {
++    padding: 12px 16px 6px;
++    color: var(--pm-ink);
++  }
++}
++
++.icon-btn {
++  width: 22px;
++  height: 22px;
++  display: grid;
++  place-items: center;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 0;
++  cursor: pointer;
++}
++
++.search {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  margin: 0 16px;
++  padding: 7px 8px;
++  background: #fff;
++  border: 1px solid var(--pm-ink);
++
++  input {
++    flex: 1;
++    min-width: 0;
++    border: 0;
++    outline: 0;
++    background: transparent;
++    font: 500 9px/1 var(--pm-font-ui);
++  }
++}
++
++.tabs {
++  display: flex;
++  gap: 4px;
++  padding: 10px 16px 0;
++
++  &__tab {
++    padding: 4px 7px;
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++    border: 1px solid var(--pm-ink);
++
++    &--on {
++      background: var(--pm-ink);
++      color: #fff;
++    }
++  }
++}
++
++.convos {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  flex: 1;
++  min-height: 0;
++}
++
++.convo {
++  width: 100%;
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 11px 16px;
++  border: 0;
++  border-left: 3px solid transparent;
++  background: transparent;
++  text-align: left;
++  cursor: pointer;
++  color: inherit;
++
++  &--active {
++    background: var(--pm-ink);
++    color: #fff;
++    border-left-color: var(--pm-red);
++
++    .avatar {
++      background: #fff;
++      color: var(--pm-ink);
++    }
++  }
++
++  &__text {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    flex-direction: column;
++    gap: 3px;
++
++    strong {
++      font-size: 9px;
++      font-weight: 800;
++    }
++
++    small {
++      font-size: 8px;
++      color: var(--pm-muted);
++      white-space: nowrap;
++      overflow: hidden;
++      text-overflow: ellipsis;
++    }
++  }
++
++  &__time {
++    font-size: 7px;
++    color: var(--pm-muted);
++  }
++}
++
++.empty {
++  padding: 16px;
++  font-size: 9px;
++  color: var(--pm-muted);
++}
++
++/* ---------- chat ---------- */
++.chat {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++  background: var(--pm-red);
++
++  &__head {
++    display: flex;
++    align-items: center;
++    gap: 10px;
++    padding: 12px 18px;
++    background: var(--pm-ink);
++  }
++
++  &__who {
++    flex: 1;
++    min-width: 0;
++
++    h2 {
++      font-size: 15px;
++    }
++
++    small {
++      font-size: 8px;
++      color: var(--pm-muted);
++    }
++  }
++
++  &__tools {
++    display: flex;
++    gap: 12px;
++    color: var(--pm-muted);
++  }
++
++  &__empty {
++    margin: auto;
++    text-align: center;
++
++    h2 {
++      font-size: 40px;
++    }
++
++    p {
++      font-size: 10px;
++      opacity: 0.85;
++    }
++  }
++}
++
++.feed {
++  flex: 1;
++  min-height: 0;
++  padding: 18px 22px;
++  display: flex;
++  flex-direction: column;
++  gap: 14px;
++
++  &__note {
++    margin: auto;
++    font: 700 9px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++  }
++}
++
++.row {
++  display: flex;
++  flex-direction: column;
++  align-items: flex-start;
++  gap: 4px;
++  max-width: 78%;
++
++  &--mine {
++    align-self: flex-end;
++    align-items: flex-end;
++
++    .row__line {
++      flex-direction: row-reverse;
++    }
++  }
++
++  &__meta {
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.12em;
++    text-transform: uppercase;
++
++    time {
++      margin-left: 6px;
++      opacity: 0.7;
++    }
++  }
++
++  &__line {
++    display: flex;
++    align-items: flex-end;
++    gap: 8px;
++  }
++}
++
++.bubble {
++  margin: 0;
++  padding: 10px 16px;
++  background: #fff;
++  color: var(--pm-ink);
++  font: 500 10px/1.4 var(--pm-font-ui);
++  border: 2px solid var(--pm-ink);
++  box-shadow: 4px 4px 0 var(--pm-ink);
++  transform: skewX(-6deg);
++  word-break: break-word;
++}
++
++.composer {
++  padding: 12px 18px 10px;
++  background: var(--pm-ink);
++
++  &__label {
++    display: block;
++    margin-bottom: 6px;
++    color: #fff;
++    font-size: 9px;
++  }
++
++  &__box {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++    padding: 6px 6px 6px 12px;
++    background: #fff;
++
++    input {
++      flex: 1;
++      min-width: 0;
++      border: 0;
++      outline: 0;
++      font: 500 10px/1 var(--pm-font-ui);
++      color: var(--pm-ink);
++    }
++  }
++
++  &__hint {
++    display: block;
++    margin-top: 6px;
++    font-size: 7px;
++    color: var(--pm-muted);
++  }
++}
++
++/* ---------- aside ---------- */
++.intel {
++  &__section {
++    padding: 16px 18px;
++    border-bottom: 1px solid var(--pm-line);
++  }
++
++  &__title {
++    font-size: 20px;
++    margin-top: 6px;
++  }
++
++  &__empty {
++    margin: 8px 0 0;
++    font-size: 8px;
++    color: var(--pm-muted);
++  }
++}
++
++.members {
++  list-style: none;
++  margin: 8px 0 0;
++  padding: 0;
++  display: flex;
++  flex-direction: column;
++  gap: 9px;
++
++  li {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++  }
++
++  &__text {
++    flex: 1;
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++
++    strong {
++      font-size: 9px;
++    }
++
++    small {
++      font-size: 7px;
++      color: var(--pm-muted);
++      text-transform: capitalize;
++    }
++  }
++
++  .avatar {
++    background: #fff;
++    color: var(--pm-ink);
++  }
++}
++
++.dot {
++  width: 5px;
++  height: 5px;
++  background: #4a4a50;
++
++  &--on {
++    background: var(--pm-red);
++  }
++}
++
++.file {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  margin-top: 10px;
++  padding: 8px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++
++  &__text {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++
++    strong {
++      font-size: 8px;
++      white-space: nowrap;
++      overflow: hidden;
++      text-overflow: ellipsis;
++    }
++
++    small {
++      font-size: 7px;
++      color: var(--pm-muted);
++    }
++  }
++}
+diff --git a/src/app/features/messages/messages.ts b/src/app/features/messages/messages.ts
+new file mode 100644
+index 0000000..0dc4212
+--- /dev/null
++++ b/src/app/features/messages/messages.ts
+@@ -0,0 +1,162 @@
++import {
++  Component,
++  DestroyRef,
++  ElementRef,
++  OnDestroy,
++  OnInit,
++  computed,
++  effect,
++  inject,
++  signal,
++  viewChild,
++} from '@angular/core';
++import { FormsModule } from '@angular/forms';
++import { DatePipe } from '@angular/common';
++import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
++
++import { AuthService } from '../../core/services/auth';
++import { ConversationService } from '../../core/services/conversation';
++import { EchoService } from '../../core/services/echo';
++import { MessageService } from '../../core/services/message';
++import { Conversation } from '../../core/models/conversation';
++import { Message, MessageAttachment } from '../../core/models/message';
++import { PmIcon } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++@Component({
++  selector: 'app-messages',
++  imports: [FormsModule, DatePipe, PmIcon, PageFrame],
++  templateUrl: './messages.html',
++  styleUrl: './messages.scss',
++})
++export class Messages implements OnInit, OnDestroy {
++  private conversationService = inject(ConversationService);
++  private messageService = inject(MessageService);
++  private echo = inject(EchoService);
++  private auth = inject(AuthService);
++  private destroyRef = inject(DestroyRef);
++
++  private feed = viewChild<ElementRef<HTMLElement>>('feed');
++
++  conversations = signal<Conversation[]>([]);
++  selected = signal<Conversation | null>(null);
++  messages = signal<Message[]>([]);
++  draft = signal('');
++  query = signal('');
++  loading = signal(false);
++
++  currentUserId = this.auth.currentUser()?.id ?? 0;
++
++  filtered = computed(() => {
++    const q = this.query().trim().toLowerCase();
++    if (!q) return this.conversations();
++    return this.conversations().filter((c) => (c.name ?? '').toLowerCase().includes(q));
++  });
++
++  /** Files seen in the loaded thread, shown in the "Shared intel" panel. */
++  sharedFiles = computed<MessageAttachment[]>(() =>
++    this.messages()
++      .flatMap((m) => m.attachments ?? [])
++      .slice(-4)
++      .reverse(),
++  );
++
++  onlineCount = computed(
++    () => this.selected()?.participants.filter((p) => p.status === 'online').length ?? 0,
++  );
++
++  private activeConversationId: number | null = null;
++
++  constructor() {
++    // Keep the newest message in view whenever the thread changes.
++    effect(() => {
++      this.messages();
++      queueMicrotask(() => {
++        const el = this.feed()?.nativeElement;
++        if (el) el.scrollTop = el.scrollHeight;
++      });
++    });
++  }
++
++  ngOnInit(): void {
++    this.conversationService
++      .list()
++      .pipe(takeUntilDestroyed(this.destroyRef))
++      .subscribe({
++        next: (res) => {
++          this.conversations.set(res.conversations);
++          if (res.conversations.length) this.open(res.conversations[0]);
++        },
++      });
++  }
++
++  ngOnDestroy(): void {
++    if (this.activeConversationId) this.echo.leaveConversation(this.activeConversationId);
++  }
++
++  open(conversation: Conversation): void {
++    if (this.activeConversationId) this.echo.leaveConversation(this.activeConversationId);
++
++    this.activeConversationId = conversation.id;
++    this.selected.set(conversation);
++    this.messages.set([]);
++    this.loading.set(true);
++
++    this.messageService
++      .getMessages(conversation.id)
++      .pipe(takeUntilDestroyed(this.destroyRef))
++      .subscribe({
++        next: (res) => {
++          // API returns newest first; the feed reads oldest first.
++          this.messages.set([...res.messages].reverse());
++          this.loading.set(false);
++        },
++        error: () => this.loading.set(false),
++      });
++
++    this.messageService.markAsRead(conversation.id).subscribe();
++
++    this.echo.listenToConversation(conversation.id, ({ message }: { message: Message }) => {
++      this.messages.update((list) => [...list, message]);
++      this.messageService.markAsRead(conversation.id).subscribe();
++    });
++  }
++
++  send(): void {
++    const body = this.draft().trim();
++    const id = this.selected()?.id;
++    if (!body || !id) return;
++
++    this.draft.set('');
++    this.messageService.sendText(id, body).subscribe({
++      next: (res) => {
++        this.messages.update((list) => [...list, res.data]);
++        this.messageService.markAsRead(id).subscribe();
++      },
++      // Put the text back so a failed send is never silently lost.
++      error: () => this.draft.set(body),
++    });
++  }
++
++  isMine(m: Message): boolean {
++    return m.sender?.id === this.currentUserId;
++  }
++
++  initial(name: string | null | undefined): string {
++    return (name ?? '?').charAt(0).toUpperCase();
++  }
++
++  previewOf(c: Conversation): string {
++    return c.latest_message?.body ?? 'No messages yet';
++  }
++
++  fileName(path: string): string {
++    return path.split('/').pop() ?? path;
++  }
++
++  size(bytes: number): string {
++    return bytes >= 1_048_576
++      ? `${(bytes / 1_048_576).toFixed(1)} MB`
++      : `${Math.max(1, Math.round(bytes / 1024))} KB`;
++  }
++}
+diff --git a/src/app/features/saved/saved.html b/src/app/features/saved/saved.html
+new file mode 100644
+index 0000000..8a733f9
+--- /dev/null
++++ b/src/app/features/saved/saved.html
+@@ -0,0 +1,108 @@
++<pm-page-frame>
++  <div slot="list">
++    <header class="pm-list-head">
++      <h1 class="pm-title">Saved</h1>
++      <button class="pm-icon-btn" type="button" aria-label="New collection">
++        <pm-icon name="plus" [size]="12" />
++      </button>
++    </header>
++    <label class="pm-search">
++      <pm-icon name="search" [size]="11" />
++      <input
++        type="text"
++        placeholder="Search your saved intel"
++        [value]="query()"
++        (input)="query.set($any($event.target).value)"
++      />
++    </label>
++    <div class="pm-eyebrow label">Your collections</div>
++    <ul class="cols">
++      @for (c of collections; track c.name) {
++        <li>
++          <button
++            type="button"
++            class="pm-list-item"
++            [class.active]="collection() === c.name"
++            (click)="collection.set(c.name)"
++          >
++            <span class="pm-list-item__text"><strong>{{ c.name }}</strong></span>
++            <span class="count">{{ c.count }}</span>
++          </button>
++        </li>
++      }
++    </ul>
++    <p class="hint">Keep the good stuff close. Save a message from any conversation to find it here.</p>
++  </div>
++
++  <div slot="main" class="page">
++    <header class="pm-hero">
++      <div>
++        <div class="pm-eyebrow">Personal archive / Only you can see this</div>
++        <h2 class="pm-title">Saved messages</h2>
++      </div>
++      <button class="pm-btn" type="button"><span>New collection</span></button>
++    </header>
++
++    <div class="tabrow">
++      @for (t of tabs; track t.id) {
++        <button type="button" [class.on]="tab() === t.id" (click)="tab.set(t.id)">{{ t.label }}</button>
++      }
++    </div>
++
++    <div class="stream pm-scroll">
++      @for (group of days(); track group.label) {
++        @if (group.items.length) {
++          <div class="day">{{ group.label }} / {{ group.items.length }} saves</div>
++          @for (s of group.items; track s.id) {
++            <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s)">
++              <header>
++                <span class="pm-avatar pm-avatar--light">{{ s.author.charAt(0) }}</span>
++                <strong>{{ s.author }}</strong>
++                <small>{{ s.group }} · {{ s.time }}</small>
++                <pm-icon name="saved" [size]="12" />
++              </header>
++              <p>{{ s.body }}</p>
++              @if (s.attachment; as a) {
++                <div class="attach"><pm-icon name="file" [size]="12" />{{ a.name }}</div>
++              }
++              <footer>
++                <span class="tag">{{ s.collection }}</span>
++                <a routerLink="/messages" class="jump">Jump to message</a>
++              </footer>
++            </article>
++          }
++        }
++      }
++      @if (!visible().length) {
++        <p class="none">Nothing saved here yet.</p>
++      }
++    </div>
++  </div>
++
++  <div slot="aside">
++    @if (focus(); as f) {
++      <section class="pm-section">
++        <div class="pm-eyebrow">Saved attachment</div>
++        <h2 class="pm-title">{{ f.attachment ? 'The game plan' : 'Saved message' }}</h2>
++      </section>
++
++      <section class="pm-section">
++        <div class="preview">
++          <pm-icon name="star" [size]="16" />
++          <h3 class="pm-title">{{ f.attachment ? 'Tomorrow’s game plan.' : f.collection }}</h3>
++          <p>{{ f.body }}</p>
++        </div>
++        <div class="meta">
++          <span class="pm-label">Original message</span>
++          <small>{{ f.author }} · {{ f.time }}</small>
++          <span class="pm-label">Collection</span>
++          <small>{{ f.collection }}</small>
++        </div>
++        @if (f.attachment) {
++          <button type="button" class="pm-btn side"><span>Download file</span></button>
++        }
++        <a routerLink="/messages" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>
++      </section>
++    }
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/saved/saved.scss b/src/app/features/saved/saved.scss
+new file mode 100644
+index 0000000..8609a35
+--- /dev/null
++++ b/src/app/features/saved/saved.scss
+@@ -0,0 +1,195 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.page {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++  background: var(--pm-red);
++}
++
++.label {
++  padding: 14px 16px 6px;
++  color: var(--pm-ink);
++}
++
++.cols {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++}
++
++.count {
++  font: 800 8px/1 var(--pm-font-ui);
++  color: var(--pm-muted);
++}
++
++.hint {
++  margin: 18px 16px;
++  font-size: 7px;
++  line-height: 1.6;
++  color: var(--pm-muted);
++}
++
++.tabrow {
++  display: flex;
++  gap: 18px;
++  padding: 0 22px;
++  background: var(--pm-red-deep);
++
++  button {
++    padding: 10px 0;
++    background: transparent;
++    border: 0;
++    border-bottom: 2px solid transparent;
++    color: #fff;
++    opacity: 0.7;
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.14em;
++    text-transform: uppercase;
++    cursor: pointer;
++
++    &.on {
++      opacity: 1;
++      border-bottom-color: #fff;
++    }
++  }
++}
++
++.stream {
++  flex: 1;
++  min-height: 0;
++  padding: 14px 22px;
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++}
++
++.day {
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.14em;
++  text-transform: uppercase;
++}
++
++.none {
++  margin: auto;
++  font: 700 9px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++}
++
++.card {
++  padding: 12px 14px;
++  background: var(--pm-ink);
++  border: 2px solid var(--pm-ink);
++  cursor: pointer;
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++
++  &--on {
++    border-color: #fff;
++  }
++
++  header {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++
++    strong {
++      font-size: 9px;
++    }
++
++    small {
++      flex: 1;
++      font-size: 7px;
++      color: var(--pm-muted);
++    }
++
++    pm-icon {
++      color: var(--pm-red);
++    }
++  }
++
++  p {
++    margin: 0;
++    font-size: 10px;
++    line-height: 1.45;
++  }
++
++  footer {
++    display: flex;
++    justify-content: space-between;
++    align-items: center;
++  }
++}
++
++.attach {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 8px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++  font-size: 8px;
++  font-weight: 700;
++}
++
++.tag {
++  font: 800 6px/1 var(--pm-font-ui);
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++  color: var(--pm-red);
++}
++
++.jump {
++  font: 700 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.08em;
++  text-transform: uppercase;
++  color: #fff;
++  text-decoration: none;
++}
++
++.preview {
++  padding: 14px;
++  background: var(--pm-paper);
++  color: var(--pm-ink);
++
++  pm-icon {
++    color: var(--pm-red);
++  }
++
++  h3 {
++    margin: 8px 0;
++    font-size: 17px;
++  }
++
++  p {
++    margin: 0;
++    font-size: 8px;
++    line-height: 1.5;
++    color: #444;
++  }
++}
++
++.meta {
++  display: flex;
++  flex-direction: column;
++  gap: 5px;
++  margin: 12px 0;
++
++  small {
++    font-size: 8px;
++    margin-bottom: 6px;
++  }
++}
++
++.side {
++  width: 100%;
++  margin-top: 8px;
++  justify-content: center;
++  text-decoration: none;
++}
+diff --git a/src/app/features/saved/saved.ts b/src/app/features/saved/saved.ts
+new file mode 100644
+index 0000000..80e52c4
+--- /dev/null
++++ b/src/app/features/saved/saved.ts
+@@ -0,0 +1,56 @@
++import { Component, computed, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++
++import { COLLECTIONS, SAVED, SavedMessage } from '../../core/mock/phantom-data';
++import { PmIcon } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++type Tab = 'all' | 'messages' | 'files';
++
++@Component({
++  selector: 'app-saved',
++  imports: [RouterLink, PmIcon, PageFrame],
++  templateUrl: './saved.html',
++  styleUrl: './saved.scss',
++})
++export class Saved {
++  readonly collections = COLLECTIONS;
++  readonly tabs: { id: Tab; label: string }[] = [
++    { id: 'all', label: 'All' },
++    { id: 'messages', label: 'Messages' },
++    { id: 'files', label: 'Files' },
++  ];
++
++  collection = signal<string>(COLLECTIONS[0].name);
++  tab = signal<Tab>('all');
++  query = signal('');
++  picked = signal<number | null>(null);
++
++  visible = computed(() => {
++    const q = this.query().trim().toLowerCase();
++    const col = this.collection();
++    return SAVED.filter((s) => {
++      if (col !== COLLECTIONS[0].name && s.collection !== col) return false;
++      if (this.tab() === 'files' && !s.attachment) return false;
++      if (this.tab() === 'messages' && s.attachment) return false;
++      return !q || `${s.body} ${s.author}`.toLowerCase().includes(q);
++    });
++  });
++
++  days = computed(() => [
++    { label: 'Today', items: this.visible().filter((s) => s.day === 'today') },
++    { label: 'Yesterday', items: this.visible().filter((s) => s.day === 'yesterday') },
++  ]);
++
++  /** The item shown in the right panel: the one clicked, else the first with a file. */
++  focus = computed<SavedMessage | undefined>(() => {
++    const id = this.picked();
++    return (
++      SAVED.find((s) => s.id === id) ?? this.visible().find((s) => s.attachment) ?? this.visible()[0]
++    );
++  });
++
++  pick(s: SavedMessage): void {
++    this.picked.set(s.id);
++  }
++}
+diff --git a/src/app/features/search/search.html b/src/app/features/search/search.html
+new file mode 100644
+index 0000000..0ab4d66
+--- /dev/null
++++ b/src/app/features/search/search.html
+@@ -0,0 +1,136 @@
++<pm-page-frame>
++  <div slot="list">
++    <header class="pm-list-head">
++      <h1 class="pm-title">Search</h1>
++    </header>
++
++    <div class="pm-eyebrow label">Narrow the search</div>
++
++    <div class="filter">
++      <span class="pm-label dark">In conversation</span>
++      <select><option>All conversations</option></select>
++    </div>
++    <div class="filter">
++      <span class="pm-label dark">From</span>
++      <select><option>Anyone</option></select>
++    </div>
++    <div class="filter">
++      <span class="pm-label dark">Date range</span>
++      <select><option>Any time</option></select>
++    </div>
++
++    <div class="filter">
++      <span class="pm-label dark">Content type</span>
++      <label class="check">
++        <input type="checkbox" checked [disabled]="true" /> Messages
++      </label>
++      <label class="check">
++        <input
++          type="checkbox"
++          [checked]="showFiles()"
++          (change)="showFiles.set($any($event.target).checked)"
++        />
++        Files &amp; attachments
++      </label>
++    </div>
++    <button type="button" class="reset" (click)="resetFilters()">Reset filters</button>
++
++    <div class="pm-eyebrow label">Recent searches</div>
++    <ul class="recent">
++      @for (r of recent(); track r) {
++        <li><button type="button" (click)="useRecent(r)">{{ r }}</button></li>
++      }
++    </ul>
++  </div>
++
++  <div slot="main" class="page">
++    <header class="pm-hero">
++      <div>
++        <div class="pm-eyebrow">Global search / Messages &amp; shared intel</div>
++        <h2 class="pm-title">Leave no clue behind.</h2>
++      </div>
++      <pm-icon name="search" [size]="18" />
++    </header>
++
++    <div class="bar">
++      <pm-icon name="search" [size]="14" />
++      <input
++        type="text"
++        placeholder="Search everywhere"
++        [value]="query()"
++        (input)="query.set($any($event.target).value)"
++        aria-label="Search everywhere"
++      />
++      @if (query()) {
++        <button type="button" aria-label="Clear search" (click)="query.set('')">
++          <pm-icon name="close" [size]="12" />
++        </button>
++      }
++    </div>
++
++    <div class="results pm-scroll">
++      <div class="count">
++        {{ results().length }} results for “{{ query() }}”
++      </div>
++
++      @if (messages().length) {
++        <div class="group">Messages / {{ messages().length }}</div>
++        @for (h of messages(); track h.id) {
++          <button type="button" class="hit" [class.hit--on]="focus()?.id === h.id" (click)="pickedId.set(h.id)">
++            <span class="hit__head">
++              <span class="pm-avatar pm-avatar--light">{{ h.author.charAt(0) }}</span>
++              <strong>{{ h.author }}</strong>
++              <small>{{ h.where }}</small>
++              <time>{{ h.time }}</time>
++            </span>
++            <span class="hit__body">
++              @for (s of segments(h.body); track $index) {
++                @if (s.hit) { <mark>{{ s.text }}</mark> } @else { {{ s.text }} }
++              }
++            </span>
++          </button>
++        }
++      }
++
++      @if (files().length) {
++        <div class="group">Files &amp; attachments / {{ files().length }}</div>
++        @for (h of files(); track h.id) {
++          <div class="hit hit--file">
++            <pm-icon name="file" [size]="13" />
++            <span class="hit__body">
++              <strong>
++                @for (s of segments(h.body); track $index) {
++                  @if (s.hit) { <mark>{{ s.text }}</mark> } @else { {{ s.text }} }
++                }
++              </strong>
++              <small>{{ h.author }} · {{ h.where }}</small>
++            </span>
++            <pm-icon name="download" [size]="12" />
++          </div>
++        }
++      }
++
++      @if (!results().length) {
++        <p class="none">No clues found. Try a different word.</p>
++      }
++    </div>
++  </div>
++
++  <div slot="aside">
++    <section class="pm-section">
++      <div class="pm-eyebrow">Result preview / Message</div>
++      <h2 class="pm-title">In context</h2>
++    </section>
++    @if (focus(); as f) {
++      <section class="pm-section">
++        <small class="where">{{ f.where }} · {{ f.time }}</small>
++        <div class="ctx">
++          <small>{{ f.author }}</small>
++          <p>{{ f.body }}</p>
++        </div>
++        <a class="pm-btn jump" routerLink="/messages"><span>Jump to message</span></a>
++        <button type="button" class="pm-btn pm-btn--dark jump"><span>Save message</span></button>
++      </section>
++    }
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/search/search.scss b/src/app/features/search/search.scss
+new file mode 100644
+index 0000000..b062e82
+--- /dev/null
++++ b/src/app/features/search/search.scss
+@@ -0,0 +1,224 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.page {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++  background: var(--pm-red);
++}
++
++.label {
++  padding: 14px 16px 6px;
++  color: var(--pm-ink);
++}
++
++.filter {
++  display: flex;
++  flex-direction: column;
++  gap: 6px;
++  padding: 6px 16px;
++
++  select {
++    padding: 7px 8px;
++    background: #fff;
++    color: var(--pm-ink);
++    border: 1px solid var(--pm-ink);
++    font: 500 8px/1 var(--pm-font-ui);
++  }
++}
++
++.dark {
++  color: #55555c;
++}
++
++.check {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  font-size: 8px;
++}
++
++.reset {
++  margin: 6px 16px;
++  padding: 0;
++  background: transparent;
++  border: 0;
++  color: var(--pm-red);
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++  cursor: pointer;
++}
++
++.recent {
++  list-style: none;
++  margin: 0;
++  padding: 0 16px;
++
++  button {
++    padding: 4px 0;
++    background: transparent;
++    border: 0;
++    font: 500 8px/1 var(--pm-font-ui);
++    cursor: pointer;
++  }
++}
++
++.bar {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  margin: 16px 22px 0;
++  padding: 10px 12px;
++  background: #fff;
++  color: var(--pm-ink);
++
++  input {
++    flex: 1;
++    min-width: 0;
++    border: 0;
++    outline: 0;
++    font: 500 11px/1 var(--pm-font-ui);
++  }
++
++  button {
++    background: transparent;
++    border: 0;
++    color: var(--pm-ink);
++    cursor: pointer;
++  }
++}
++
++.results {
++  flex: 1;
++  min-height: 0;
++  padding: 14px 22px;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++}
++
++.count,
++.group {
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.14em;
++  text-transform: uppercase;
++}
++
++.group {
++  margin-top: 6px;
++}
++
++.none {
++  margin: auto;
++  font: 700 9px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++}
++
++.hit {
++  display: flex;
++  flex-direction: column;
++  gap: 8px;
++  padding: 11px 13px;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 2px solid var(--pm-ink);
++  text-align: left;
++  font: inherit;
++  cursor: pointer;
++
++  &--on {
++    border-color: #fff;
++  }
++
++  &--file {
++    flex-direction: row;
++    align-items: center;
++    gap: 10px;
++    cursor: default;
++  }
++
++  &__head {
++    display: flex;
++    align-items: center;
++    gap: 8px;
++
++    strong {
++      font-size: 9px;
++    }
++
++    small {
++      flex: 1;
++      font-size: 7px;
++      color: var(--pm-muted);
++    }
++
++    time {
++      font-size: 7px;
++      color: var(--pm-muted);
++    }
++  }
++
++  &__body {
++    font-size: 10px;
++    line-height: 1.4;
++    flex: 1;
++
++    strong {
++      display: block;
++      font-size: 9px;
++    }
++
++    small {
++      display: block;
++      margin-top: 3px;
++      font-size: 7px;
++      color: var(--pm-muted);
++    }
++  }
++}
++
++mark {
++  background: transparent;
++  color: var(--pm-red);
++  font-weight: 800;
++}
++
++.where {
++  display: block;
++  font-size: 7px;
++  color: var(--pm-muted);
++  margin-bottom: 10px;
++}
++
++.ctx {
++  padding: 12px;
++  background: #fff;
++  color: var(--pm-ink);
++
++  small {
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++    color: var(--pm-red);
++  }
++
++  p {
++    margin: 6px 0 0;
++    font-size: 9px;
++    line-height: 1.5;
++    color: var(--pm-ink);
++  }
++}
++
++.jump {
++  width: 100%;
++  margin-top: 10px;
++  justify-content: center;
++  text-decoration: none;
++}
+diff --git a/src/app/features/search/search.ts b/src/app/features/search/search.ts
+new file mode 100644
+index 0000000..f84ad14
+--- /dev/null
++++ b/src/app/features/search/search.ts
+@@ -0,0 +1,70 @@
++import { Component, computed, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
++
++import { SEARCH_HITS, SearchHit } from '../../core/mock/phantom-data';
++import { PmIcon } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++interface Segment {
++  text: string;
++  hit: boolean;
++}
++
++@Component({
++  selector: 'app-search',
++  imports: [RouterLink, PmIcon, PageFrame],
++  templateUrl: './search.html',
++  styleUrl: './search.scss',
++})
++export class Search {
++  query = signal('Leblanc');
++  showMessages = signal(true);
++  showFiles = signal(true);
++  recent = signal(['game plan', 'ramen']);
++  pickedId = signal<number | null>(null);
++
++  results = computed(() => {
++    const q = this.query().trim().toLowerCase();
++    if (!q) return [];
++    return SEARCH_HITS.filter(
++      (h) =>
++        h.body.toLowerCase().includes(q) &&
++        (h.kind === 'message' ? this.showMessages() : this.showFiles()),
++    );
++  });
++
++  messages = computed(() => this.results().filter((h) => h.kind === 'message'));
++  files = computed(() => this.results().filter((h) => h.kind === 'file'));
++
++  focus = computed<SearchHit | undefined>(
++    () => this.results().find((h) => h.id === this.pickedId()) ?? this.messages()[0],
++  );
++
++  /** Split text around each match so the template can highlight it without innerHTML. */
++  segments(text: string): Segment[] {
++    const q = this.query().trim();
++    if (!q) return [{ text, hit: false }];
++
++    const lower = text.toLowerCase();
++    const needle = q.toLowerCase();
++    const out: Segment[] = [];
++    let from = 0;
++
++    for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, from)) {
++      if (at > from) out.push({ text: text.slice(from, at), hit: false });
++      out.push({ text: text.slice(at, at + needle.length), hit: true });
++      from = at + needle.length;
++    }
++    if (from < text.length) out.push({ text: text.slice(from), hit: false });
++    return out;
++  }
++
++  useRecent(term: string): void {
++    this.query.set(term);
++  }
++
++  resetFilters(): void {
++    this.showMessages.set(true);
++    this.showFiles.set(true);
++  }
++}
+diff --git a/src/app/features/settings/settings.html b/src/app/features/settings/settings.html
+new file mode 100644
+index 0000000..d7ff909
+--- /dev/null
++++ b/src/app/features/settings/settings.html
+@@ -0,0 +1,194 @@
++<pm-page-frame>
++  <div slot="list">
++    <header class="pm-list-head">
++      <h1 class="pm-title">Settings</h1>
++    </header>
++    <label class="pm-search">
++      <pm-icon name="search" [size]="11" />
++      <input type="text" placeholder="Find a setting" />
++    </label>
++    <ul class="nav">
++      @for (item of nav; track item.label; let i = $index) {
++        <li>
++          <button type="button" class="pm-list-item" [class.active]="i === 0">
++            <pm-icon [name]="item.icon" [size]="12" />
++            <span class="pm-list-item__text"><strong>{{ item.label }}</strong></span>
++          </button>
++        </li>
++      }
++    </ul>
++    <p class="version">Phanlink Desktop · v1.0.0<br />Made for your inner circle.</p>
++  </div>
++
++  <div slot="main" class="page">
++    <header class="pm-hero">
++      <div>
++        <div class="pm-eyebrow">Preferences / Overview</div>
++        <h2 class="pm-title">Make it yours.</h2>
++      </div>
++      <button class="pm-btn" type="button" (click)="save()">
++        <span>{{ saved() ? 'Saved' : 'Save changes' }}</span>
++      </button>
++    </header>
++
++    <div class="pm-pane pm-scroll">
++      <section class="pm-card pm-card--paper">
++        <h3 class="pm-title">Your account</h3>
++        <div class="grid">
++          <label>
++            <span class="pm-label">Display name</span>
++            <input class="field" [value]="displayName()" readonly />
++          </label>
++          <label>
++            <span class="pm-label">Username</span>
++            <input class="field" [value]="'@' + username()" readonly />
++          </label>
++          <label>
++            <span class="pm-label">Status</span>
++            <input class="field" value="Laying low" readonly />
++          </label>
++        </div>
++      </section>
++
++      <section class="pm-card">
++        <h3 class="pm-title">Appearance</h3>
++        <div class="line">
++          <div>
++            <strong>Choose your style</strong>
++            <small>A little rebellion in each of them.</small>
++          </div>
++          <div class="themes" role="radiogroup" aria-label="Theme">
++            @for (t of themes; track t.id) {
++              <button
++                type="button"
++                role="radio"
++                class="theme"
++                [class.theme--on]="prefs().theme === t.id"
++                [attr.aria-checked]="prefs().theme === t.id"
++                (click)="set('theme', t.id)"
++              >
++                <i [style.background]="t.swatch"></i>{{ t.label }}
++              </button>
++            }
++          </div>
++        </div>
++        <div class="line">
++          <div>
++            <strong>Message density</strong>
++            <small>Space between messages in your conversations.</small>
++          </div>
++          <select
++            class="select"
++            [ngModel]="prefs().density"
++            (ngModelChange)="set('density', $event)"
++          >
++            <option>Comfortable</option>
++            <option>Compact</option>
++          </select>
++        </div>
++      </section>
++
++      <section class="pm-card">
++        <h3 class="pm-title">Notifications</h3>
++        <div class="line">
++          <div>
++            <strong>Desktop notifications</strong>
++            <small>Get a heads-up when a confidant messages you.</small>
++          </div>
++          <button
++            type="button"
++            class="pm-toggle"
++            [class.on]="prefs().desktopNotifications"
++            (click)="toggle('desktopNotifications')"
++            aria-label="Desktop notifications"
++          ></button>
++        </div>
++        <div class="line">
++          <div>
++            <strong>Message previews</strong>
++            <small>Show message text in desktop notifications.</small>
++          </div>
++          <button
++            type="button"
++            class="pm-toggle"
++            [class.on]="prefs().messagePreviews"
++            (click)="toggle('messagePreviews')"
++            aria-label="Message previews"
++          ></button>
++        </div>
++      </section>
++
++      <section class="pm-card">
++        <h3 class="pm-title">Privacy &amp; security</h3>
++        <div class="line">
++          <div>
++            <strong>Who can message me</strong>
++            <small>Keep new conversations within your circle.</small>
++          </div>
++          <select
++            class="select"
++            [ngModel]="prefs().whoCanMessage"
++            (ngModelChange)="set('whoCanMessage', $event)"
++          >
++            <option>Contacts only</option>
++            <option>Everyone</option>
++          </select>
++        </div>
++        <div class="line">
++          <div>
++            <strong>Read receipts</strong>
++            <small>Let confidants know when you’ve seen their message.</small>
++          </div>
++          <button
++            type="button"
++            class="pm-toggle"
++            [class.on]="prefs().readReceipts"
++            (click)="toggle('readReceipts')"
++            aria-label="Read receipts"
++          ></button>
++        </div>
++        <div class="line">
++          <div>
++            <strong>Show online status</strong>
++            <small>Show when you’re in the hideout.</small>
++          </div>
++          <button
++            type="button"
++            class="pm-toggle"
++            [class.on]="prefs().showOnline"
++            (click)="toggle('showOnline')"
++            aria-label="Show online status"
++          ></button>
++        </div>
++      </section>
++
++      <footer class="foot">
++        <span>{{ saved() ? 'All changes saved on this device' : 'You have unsaved changes' }}</span>
++        <button type="button" class="link" (click)="reset()">Reset to defaults</button>
++      </footer>
++    </div>
++  </div>
++
++  <div slot="aside">
++    <section class="pm-section">
++      <div class="pm-eyebrow">Your secret identity</div>
++      <h2 class="pm-title">Account intel</h2>
++    </section>
++    <section class="pm-section who">
++      <span class="pm-avatar pm-avatar--lg">{{ displayName().charAt(0) }}</span>
++      <h2 class="pm-title">{{ displayName() }}</h2>
++      <p>&#64;{{ username() }} · The Phantom Thieves</p>
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Trusted device</div>
++      <p class="device"><pm-icon name="device" [size]="12" /> Phanlink Web · Current session</p>
++      <button type="button" class="pm-btn pm-btn--dark out" (click)="signOut()">
++        <span>Sign out</span>
++      </button>
++    </section>
++    <section class="pm-section">
++      <div class="pm-eyebrow">Between confidants</div>
++      <p>Your messages stay in your circle. Review linked devices and control who can reach you.</p>
++    </section>
++  </div>
++</pm-page-frame>
+diff --git a/src/app/features/settings/settings.scss b/src/app/features/settings/settings.scss
+new file mode 100644
+index 0000000..ce2d154
+--- /dev/null
++++ b/src/app/features/settings/settings.scss
+@@ -0,0 +1,150 @@
++:host {
++  display: block;
++  height: 100%;
++}
++
++.page {
++  display: flex;
++  flex-direction: column;
++  flex: 1;
++  min-height: 0;
++  background: var(--pm-red);
++
++  .pm-pane {
++    flex: 1;
++    min-height: 0;
++  }
++}
++
++.nav {
++  list-style: none;
++  margin: 12px 0 0;
++  padding: 0;
++}
++
++.version {
++  margin: 20px 16px;
++  font-size: 7px;
++  line-height: 1.6;
++  color: var(--pm-muted);
++}
++
++.grid {
++  display: grid;
++  grid-template-columns: repeat(3, minmax(0, 1fr));
++  gap: 10px;
++
++  label {
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++  }
++}
++
++.field,
++.select {
++  width: 100%;
++  padding: 8px 10px;
++  background: #fff;
++  color: var(--pm-ink);
++  border: 1px solid var(--pm-line-dark);
++  font: 500 9px/1 var(--pm-font-ui);
++}
++
++.select {
++  width: auto;
++  min-width: 110px;
++  background: var(--pm-ink-2);
++  color: #fff;
++  border-color: var(--pm-line);
++}
++
++.line {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 14px;
++  padding: 10px 0;
++  border-top: 1px solid var(--pm-line);
++
++  div {
++    display: flex;
++    flex-direction: column;
++    gap: 3px;
++  }
++
++  strong {
++    font-size: 9px;
++  }
++
++  small {
++    font-size: 8px;
++    color: var(--pm-muted);
++  }
++}
++
++.themes {
++  display: flex;
++  gap: 6px;
++}
++
++.theme {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 7px 10px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++  color: #fff;
++  font: 800 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++  cursor: pointer;
++
++  i {
++    width: 8px;
++    height: 8px;
++    border: 1px solid #fff;
++  }
++
++  &--on {
++    border-color: var(--pm-red);
++  }
++}
++
++.foot {
++  display: flex;
++  justify-content: space-between;
++  font: 700 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++}
++
++.link {
++  background: transparent;
++  border: 0;
++  color: inherit;
++  font: inherit;
++  letter-spacing: inherit;
++  text-transform: inherit;
++  cursor: pointer;
++  text-decoration: underline;
++}
++
++.who {
++  text-align: center;
++
++  .pm-avatar {
++    margin: 0 auto 10px;
++  }
++}
++
++.device {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++}
++
++.out {
++  margin-top: 10px;
++}
+diff --git a/src/app/features/settings/settings.ts b/src/app/features/settings/settings.ts
+new file mode 100644
+index 0000000..0cb03b5
+--- /dev/null
++++ b/src/app/features/settings/settings.ts
+@@ -0,0 +1,98 @@
++import { Component, computed, inject, signal } from '@angular/core';
++import { FormsModule } from '@angular/forms';
++
++import { AuthService } from '../../core/services/auth';
++import { PmIcon, PmIconName } from '../../shared/icon/icon';
++import { PageFrame } from '../../shared/page-frame/page-frame';
++
++type Theme = 'phantom' | 'midnight' | 'paper';
++
++interface Prefs {
++  theme: Theme;
++  density: 'Comfortable' | 'Compact';
++  desktopNotifications: boolean;
++  messagePreviews: boolean;
++  whoCanMessage: 'Everyone' | 'Contacts only';
++  readReceipts: boolean;
++  showOnline: boolean;
++}
++
++const STORAGE_KEY = 'phanlink.prefs';
++
++const DEFAULTS: Prefs = {
++  theme: 'phantom',
++  density: 'Comfortable',
++  desktopNotifications: true,
++  messagePreviews: false,
++  whoCanMessage: 'Contacts only',
++  readReceipts: true,
++  showOnline: true,
++};
++
++@Component({
++  selector: 'app-settings',
++  imports: [FormsModule, PmIcon, PageFrame],
++  templateUrl: './settings.html',
++  styleUrl: './settings.scss',
++})
++export class Settings {
++  private auth = inject(AuthService);
++
++  readonly nav: { label: string; icon: PmIconName }[] = [
++    { label: 'Your account', icon: 'user' },
++    { label: 'Appearance', icon: 'palette' },
++    { label: 'Notifications', icon: 'bell' },
++    { label: 'Privacy & security', icon: 'lock' },
++    { label: 'Storage & data', icon: 'storage' },
++    { label: 'Keyboard shortcuts', icon: 'keyboard' },
++  ];
++
++  readonly themes: { id: Theme; label: string; swatch: string }[] = [
++    { id: 'phantom', label: 'Phantom', swatch: '#e4182c' },
++    { id: 'midnight', label: 'Midnight', swatch: '#0d0d0f' },
++    { id: 'paper', label: 'Paper', swatch: '#f4f0e9' },
++  ];
++
++  prefs = signal<Prefs>(this.load());
++  saved = signal(true);
++
++  user = this.auth.currentUser;
++  displayName = computed(() => this.user()?.name ?? 'Ren Amamiya');
++  username = computed(() => this.user()?.username ?? 'joker');
++
++  set<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
++    this.prefs.update((p) => ({ ...p, [key]: value }));
++    this.saved.set(false);
++  }
++
++  toggle(key: 'desktopNotifications' | 'messagePreviews' | 'readReceipts' | 'showOnline'): void {
++    this.set(key, !this.prefs()[key]);
++  }
++
++  save(): void {
++    try {
++      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.prefs()));
++    } catch {
++      // Storage can be blocked (private mode); keep the in-memory values.
++    }
++    this.saved.set(true);
++  }
++
++  reset(): void {
++    this.prefs.set({ ...DEFAULTS });
++    this.saved.set(false);
++  }
++
++  signOut(): void {
++    this.auth.logout().subscribe();
++  }
++
++  private load(): Prefs {
++    try {
++      const raw = localStorage.getItem(STORAGE_KEY);
++      return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
++    } catch {
++      return { ...DEFAULTS };
++    }
++  }
++}
+diff --git a/src/app/features/shell/shell.html b/src/app/features/shell/shell.html
+new file mode 100644
+index 0000000..f61d0b4
+--- /dev/null
++++ b/src/app/features/shell/shell.html
+@@ -0,0 +1,45 @@
++<div class="window">
++  <header class="titlebar">
++    <span class="titlebar__brand"><i></i>Phantom / Messenger</span>
++    <span class="titlebar__controls" aria-hidden="true"><b></b><b></b><b></b></span>
++  </header>
++
++  <div class="body">
++    <nav class="rail" aria-label="Primary">
++      <a class="rail__logo" routerLink="/messages" aria-label="Phanlink home">
++        <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
++          <path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-4 2-7 1 1 2 2 2 4 1-2 2-5 2-9Z" />
++        </svg>
++      </a>
++
++      @for (item of items; track item.path) {
++        <a
++          class="rail__item"
++          [routerLink]="item.path"
++          routerLinkActive="active"
++          [attr.aria-label]="item.label"
++          [title]="item.label"
++        >
++          <pm-icon [name]="item.icon" [size]="15" />
++        </a>
++      }
++
++      <span class="rail__tagline">Take your time</span>
++
++      <a
++        class="rail__item"
++        routerLink="/settings"
++        routerLinkActive="active"
++        aria-label="Settings"
++        title="Settings"
++      >
++        <pm-icon name="settings" [size]="15" />
++      </a>
++      <span class="rail__me" [title]="'Signed in'">{{ initial() }}</span>
++    </nav>
++
++    <main class="content">
++      <router-outlet />
++    </main>
++  </div>
++</div>
+diff --git a/src/app/features/shell/shell.scss b/src/app/features/shell/shell.scss
+new file mode 100644
+index 0000000..1227676
+--- /dev/null
++++ b/src/app/features/shell/shell.scss
+@@ -0,0 +1,135 @@
++:host {
++  display: block;
++  height: 100vh;
++  background: var(--pm-ink);
++  color: #fff;
++}
++
++.window {
++  height: 100%;
++  display: flex;
++  flex-direction: column;
++}
++
++.titlebar {
++  height: 22px;
++  flex: none;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 0 12px;
++  background: #000;
++  border-bottom: 1px solid var(--pm-line);
++
++  &__brand {
++    display: inline-flex;
++    align-items: center;
++    gap: 6px;
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.18em;
++    text-transform: uppercase;
++
++    i {
++      width: 5px;
++      height: 5px;
++      background: var(--pm-red);
++      transform: rotate(45deg);
++    }
++  }
++
++  &__controls {
++    display: inline-flex;
++    gap: 14px;
++
++    b {
++      width: 7px;
++      height: 1px;
++      background: var(--pm-muted);
++    }
++  }
++}
++
++.body {
++  flex: 1;
++  min-height: 0;
++  display: grid;
++  grid-template-columns: 56px minmax(0, 1fr);
++}
++
++.rail {
++  display: flex;
++  flex-direction: column;
++  align-items: center;
++  gap: 10px;
++  padding: 12px 0;
++  background: #000;
++  border-right: 1px solid var(--pm-line);
++
++  &__logo {
++    width: 32px;
++    height: 32px;
++    display: grid;
++    place-items: center;
++    background: var(--pm-red);
++    margin-bottom: 10px;
++    transform: rotate(-6deg);
++  }
++
++  &__item {
++    width: 30px;
++    height: 30px;
++    display: grid;
++    place-items: center;
++    color: var(--pm-muted);
++    border: 1px solid transparent;
++    text-decoration: none;
++    transition: color 0.15s, border-color 0.15s;
++
++    &:hover {
++      color: #fff;
++    }
++
++    &.active {
++      color: #fff;
++      border-color: var(--pm-red);
++      background: var(--pm-ink-3);
++    }
++  }
++
++  &__tagline {
++    margin-top: auto;
++    writing-mode: vertical-rl;
++    transform: rotate(180deg);
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.2em;
++    text-transform: uppercase;
++    color: var(--pm-red);
++    padding-bottom: 12px;
++  }
++
++  &__me {
++    width: 22px;
++    height: 22px;
++    display: grid;
++    place-items: center;
++    border: 1px solid var(--pm-red);
++    background: var(--pm-ink);
++    font: 800 10px/1 var(--pm-font-ui);
++  }
++}
++
++.content {
++  min-width: 0;
++  min-height: 0;
++  height: 100%;
++}
++
++@media (max-width: 720px) {
++  .body {
++    grid-template-columns: 44px minmax(0, 1fr);
++  }
++
++  .titlebar__controls {
++    display: none;
++  }
++}
+diff --git a/src/app/features/shell/shell.ts b/src/app/features/shell/shell.ts
+new file mode 100644
+index 0000000..1d27e93
+--- /dev/null
++++ b/src/app/features/shell/shell.ts
+@@ -0,0 +1,31 @@
++import { Component, computed, inject } from '@angular/core';
++import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
++
++import { AuthService } from '../../core/services/auth';
++import { PmIcon, PmIconName } from '../../shared/icon/icon';
++
++interface RailItem {
++  path: string;
++  label: string;
++  icon: PmIconName;
++}
++
++@Component({
++  selector: 'app-shell',
++  imports: [RouterOutlet, RouterLink, RouterLinkActive, PmIcon],
++  templateUrl: './shell.html',
++  styleUrl: './shell.scss',
++})
++export class Shell {
++  private auth = inject(AuthService);
++
++  readonly items: RailItem[] = [
++    { path: '/messages', label: 'Messages', icon: 'chat' },
++    { path: '/groups', label: 'Groups', icon: 'groups' },
++    { path: '/saved', label: 'Saved', icon: 'saved' },
++    { path: '/contacts', label: 'Contacts', icon: 'contacts' },
++    { path: '/search', label: 'Search', icon: 'search' },
++  ];
++
++  initial = computed(() => (this.auth.currentUser()?.name ?? 'R').charAt(0).toUpperCase());
++}
+diff --git a/src/app/shared/icon/icon.ts b/src/app/shared/icon/icon.ts
+new file mode 100644
+index 0000000..c3cc37c
+--- /dev/null
++++ b/src/app/shared/icon/icon.ts
+@@ -0,0 +1,103 @@
++import { Component, computed, input } from '@angular/core';
++
++export type PmIconName =
++  | 'chat'
++  | 'groups'
++  | 'saved'
++  | 'archive'
++  | 'contacts'
++  | 'search'
++  | 'settings'
++  | 'compose'
++  | 'plus'
++  | 'phone'
++  | 'more'
++  | 'send'
++  | 'smile'
++  | 'file'
++  | 'download'
++  | 'arrow'
++  | 'star'
++  | 'pin'
++  | 'link'
++  | 'image'
++  | 'close'
++  | 'chevron-down'
++  | 'logout'
++  | 'bell'
++  | 'lock'
++  | 'palette'
++  | 'keyboard'
++  | 'storage'
++  | 'user'
++  | 'edit'
++  | 'device';
++
++/** Stroke paths on a 24x24 grid, kept in one place so pages stay readable. */
++const PATHS: Record<PmIconName, string> = {
++  chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z',
++  groups:
++    'M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM20 20v-1.5a3.5 3.5 0 0 0-2.5-3.35M15.5 4.15a3.5 3.5 0 0 1 0 6.7',
++  saved: 'M6 4h12v17l-6-4-6 4V4Z',
++  archive: 'M4 7h16v3H4V7Zm1 3h14v10H5V10Zm4 4h6',
++  contacts: 'M5 4h14v16H5V4Zm7 7a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm-4.5 7a4.5 4.5 0 0 1 9 0',
++  search: 'm20 20-4.2-4.2M17 10.5a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0Z',
++  settings:
++    'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7.4-3a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7.6 7.6 0 0 0-2-1.2L14.6 3h-4l-.4 2.6a7.6 7.6 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-.9a7.6 7.6 0 0 0 2 1.2l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z',
++  compose: 'M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4',
++  plus: 'M12 5v14M5 12h14',
++  phone:
++    'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1Z',
++  more: 'M5 12h.01M12 12h.01M19 12h.01',
++  send: 'M5 12h14m-6-6 6 6-6 6',
++  smile: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-3.5-7a4 4 0 0 0 7 0M9 9.5h.01M15 9.5h.01',
++  file: 'M7 3h7l4 4v14H7V3Zm7 0v4h4',
++  download: 'M12 4v11m-4-4 4 4 4-4M5 20h14',
++  arrow: 'M7 17 17 7M9 7h8v8',
++  star: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3Z',
++  pin: 'M9 4h6l-1 6 3 3H7l3-3-1-6Zm3 9v7',
++  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1',
++  image: 'M4 5h16v14H4V5Zm0 11 5-5 4 4 3-3 4 4M15 9.5h.01',
++  close: 'm6 6 12 12M18 6 6 18',
++  'chevron-down': 'm6 9 6 6 6-6',
++  logout: 'M10 4H5v16h5M15 8l4 4-4 4M19 12H9',
++  bell: 'M6 16V11a6 6 0 1 1 12 0v5l2 2H4l2-2Zm4 4a2 2 0 0 0 4 0',
++  lock: 'M6 11h12v9H6v-9Zm3 0V8a3 3 0 0 1 6 0v3',
++  palette:
++    'M12 3a9 9 0 1 0 0 18c1.2 0 1.7-.9 1.4-1.8-.4-1.1.2-2.2 1.4-2.2H17a4 4 0 0 0 4-4c0-5-4-10-9-10ZM7.5 11h.01M10 7.5h.01M14.5 7.5h.01',
++  keyboard: 'M3 6h18v12H3V6Zm4 8h10M7 10h.01M11 10h.01M15 10h.01M19 10h.01',
++  storage: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6',
++  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0',
++  edit: 'M4 20h4L19 9l-4-4L4 16v4Z',
++  device: 'M4 5h16v11H4V5Zm4 15h8',
++};
++
++@Component({
++  selector: 'pm-icon',
++  template: `
++    <svg
++      [attr.width]="size()"
++      [attr.height]="size()"
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      stroke-width="2"
++      stroke-linecap="square"
++      stroke-linejoin="miter"
++      aria-hidden="true"
++    >
++      <path [attr.d]="path()" />
++    </svg>
++  `,
++  styles: `
++    :host {
++      display: inline-flex;
++      line-height: 0;
++    }
++  `,
++})
++export class PmIcon {
++  name = input.required<PmIconName>();
++  size = input(14);
++  path = computed(() => PATHS[this.name()]);
++}
+diff --git a/src/app/shared/page-frame/page-frame.scss b/src/app/shared/page-frame/page-frame.scss
+new file mode 100644
+index 0000000..8cb6bd9
+--- /dev/null
++++ b/src/app/shared/page-frame/page-frame.scss
+@@ -0,0 +1,127 @@
++:host {
++  display: grid;
++  grid-template-columns: 252px minmax(0, 1fr) 282px;
++  height: 100%;
++  min-height: 0;
++  font-family: var(--pm-font-ui);
++}
++
++.list,
++.main,
++.aside {
++  min-height: 0;
++  min-width: 0;
++  display: flex;
++  flex-direction: column;
++}
++
++/* ---- list column ---- */
++.list {
++  background: var(--pm-paper);
++  color: var(--pm-ink);
++
++  &--dark {
++    background: var(--pm-ink);
++    color: #fff;
++  }
++}
++
++.me {
++  margin-top: auto;
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 12px 16px;
++  border-top: 1px solid var(--pm-line-dark);
++
++  &__avatar {
++    width: 22px;
++    height: 22px;
++    display: grid;
++    place-items: center;
++    background: var(--pm-ink);
++    color: #fff;
++    font: 800 10px/1 var(--pm-font-ui);
++    border: 1px solid var(--pm-red);
++  }
++
++  &__text {
++    flex: 1;
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++
++    strong {
++      font-size: 9px;
++      font-weight: 700;
++    }
++
++    small {
++      font-size: 8px;
++      color: var(--pm-muted);
++    }
++  }
++}
++
++.list--dark .me {
++  border-top-color: var(--pm-line);
++}
++
++/* ---- main column ---- */
++.main {
++  background: var(--pm-ink);
++  color: #fff;
++}
++
++/* ---- aside column ---- */
++.aside {
++  background: var(--pm-ink);
++  color: #fff;
++  border-left: 1px solid var(--pm-line);
++
++  &__body {
++    flex: 1;
++    min-height: 0;
++  }
++}
++
++.brand {
++  background: var(--pm-red);
++  padding: 14px 18px 12px;
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++
++  &__title {
++    font-size: 22px;
++    transform: rotate(-3deg);
++    transform-origin: left center;
++  }
++
++  &__sub {
++    font: 700 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.14em;
++    text-transform: uppercase;
++    opacity: 0.8;
++  }
++}
++
++@media (max-width: 1100px) {
++  :host {
++    grid-template-columns: 220px minmax(0, 1fr);
++  }
++
++  .aside {
++    display: none;
++  }
++}
++
++@media (max-width: 720px) {
++  :host {
++    grid-template-columns: minmax(0, 1fr);
++  }
++
++  .list {
++    display: none;
++  }
++}
+diff --git a/src/app/shared/page-frame/page-frame.ts b/src/app/shared/page-frame/page-frame.ts
+new file mode 100644
+index 0000000..83bb2e2
+--- /dev/null
++++ b/src/app/shared/page-frame/page-frame.ts
+@@ -0,0 +1,51 @@
++import { Component, computed, inject, input } from '@angular/core';
++
++import { AuthService } from '../../core/services/auth';
++import { PmIcon } from '../icon/icon';
++
++/**
++ * Three-column frame shared by every page: list | main | aside.
++ * Pages project content with `slot="list"`, `slot="main"` and `slot="aside"`.
++ */
++@Component({
++  selector: 'pm-page-frame',
++  imports: [PmIcon],
++  template: `
++    <section class="list" [class.list--dark]="listTone() === 'dark'">
++      <ng-content select="[slot=list]" />
++
++      <footer class="me">
++        <span class="me__avatar">{{ initial() }}</span>
++        <span class="me__text">
++          <strong>{{ displayName() }}</strong>
++          <small>Online · Laying low</small>
++        </span>
++        <pm-icon name="chevron-down" [size]="12" />
++      </footer>
++    </section>
++
++    <section class="main">
++      <ng-content select="[slot=main]" />
++    </section>
++
++    <aside class="aside">
++      <div class="aside__body pm-scroll">
++        <ng-content select="[slot=aside]" />
++      </div>
++
++      <footer class="brand">
++        <span class="brand__title pm-title">Take your heart.</span>
++        <span class="brand__sub">Stay connected. Stay rebellious.</span>
++      </footer>
++    </aside>
++  `,
++  styleUrl: './page-frame.scss',
++})
++export class PageFrame {
++  private auth = inject(AuthService);
++
++  listTone = input<'paper' | 'dark'>('paper');
++
++  displayName = computed(() => this.auth.currentUser()?.name ?? 'Ren Amamiya');
++  initial = computed(() => this.displayName().charAt(0).toUpperCase());
++}
+diff --git a/src/index.html b/src/index.html
+index 4b4da67..387665e 100644
+--- a/src/index.html
++++ b/src/index.html
+@@ -8,7 +8,7 @@
+   <link rel="icon" type="image/x-icon" href="favicon.ico">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;700;900&display=swap" rel="stylesheet">
++  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+ </head>
+ <body>
+   <app-root></app-root>
+diff --git a/src/styles.scss b/src/styles.scss
+index 7bc5fa6..aa3f7ca 100644
+--- a/src/styles.scss
++++ b/src/styles.scss
+@@ -8,6 +8,309 @@
+ 
+   --font-display: 'Anton', sans-serif;
+   --font-body: 'Archivo', sans-serif;
++
++  /* Phantom Messenger design tokens (shell + pages) */
++  --pm-red: #e4182c;
++  --pm-red-deep: #8f0f1b;
++  --pm-ink: #0d0d0f;
++  --pm-ink-2: #17171a;
++  --pm-ink-3: #232327;
++  --pm-paper: #f4f0e9;
++  --pm-paper-2: #e9e4da;
++  --pm-line: rgba(255, 255, 255, 0.12);
++  --pm-line-dark: rgba(13, 13, 15, 0.14);
++  --pm-muted: #8b8b92;
++  --pm-font-ui: 'Inter', 'Archivo', system-ui, sans-serif;
++}
++
++/* ---- shared Phantom Messenger primitives ---- */
++.pm-eyebrow {
++  font: 700 8px/1.2 var(--pm-font-ui);
++  letter-spacing: 0.16em;
++  text-transform: uppercase;
++  color: var(--pm-red);
++}
++
++.pm-title {
++  font-family: var(--font-display);
++  text-transform: uppercase;
++  letter-spacing: 0.02em;
++  line-height: 1;
++  margin: 0;
++}
++
++.pm-btn {
++  display: inline-flex;
++  align-items: center;
++  gap: 6px;
++  padding: 8px 12px;
++  border: 0;
++  background: var(--pm-red);
++  color: #fff;
++  font: 800 9px/1 var(--pm-font-ui);
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++  cursor: pointer;
++  transform: skewX(-8deg);
++
++  > * {
++    transform: skewX(8deg);
++  }
++
++  &--dark {
++    background: var(--pm-ink);
++    border: 1px solid var(--pm-line);
++  }
++
++  &--paper {
++    background: var(--pm-paper);
++    color: var(--pm-ink);
++  }
++}
++
++.pm-toggle {
++  width: 22px;
++  height: 12px;
++  border: 0;
++  padding: 2px;
++  background: #3a3a40;
++  cursor: pointer;
++  display: inline-flex;
++  align-items: center;
++
++  &::after {
++    content: '';
++    width: 8px;
++    height: 8px;
++    background: #fff;
++    transition: transform 0.15s;
++  }
++
++  &.on {
++    background: var(--pm-red);
++
++    &::after {
++      transform: translateX(10px);
++    }
++  }
++}
++
++.pm-scroll {
++  overflow-y: auto;
++  scrollbar-width: thin;
++  scrollbar-color: var(--pm-red) transparent;
++}
++
++.pm-avatar {
++  flex: none;
++  width: 22px;
++  height: 22px;
++  display: grid;
++  place-items: center;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 1px solid var(--pm-ink);
++  font: 800 10px/1 var(--pm-font-ui);
++
++  &--light {
++    background: #fff;
++    color: var(--pm-ink);
++  }
++
++  &--lg {
++    width: 64px;
++    height: 64px;
++    font-size: 26px;
++    background: #fff;
++    color: var(--pm-ink);
++    border: 2px solid var(--pm-ink);
++  }
++}
++
++.pm-list-head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 18px 16px 10px;
++
++  h1 {
++    font-size: 26px;
++  }
++}
++
++.pm-icon-btn {
++  width: 22px;
++  height: 22px;
++  display: grid;
++  place-items: center;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 0;
++  cursor: pointer;
++}
++
++.pm-search {
++  display: flex;
++  align-items: center;
++  gap: 6px;
++  margin: 0 16px;
++  padding: 7px 8px;
++  background: #fff;
++  color: var(--pm-ink);
++  border: 1px solid var(--pm-ink);
++
++  input {
++    flex: 1;
++    min-width: 0;
++    border: 0;
++    outline: 0;
++    background: transparent;
++    font: 500 9px/1 var(--pm-font-ui);
++  }
++}
++
++.pm-list-item {
++  width: 100%;
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 10px 16px;
++  border: 0;
++  border-left: 3px solid transparent;
++  background: transparent;
++  color: inherit;
++  text-align: left;
++  font: inherit;
++  cursor: pointer;
++
++  &.active {
++    background: var(--pm-ink);
++    color: #fff;
++    border-left-color: var(--pm-red);
++  }
++
++  &__text {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    flex-direction: column;
++    gap: 3px;
++
++    strong {
++      font-size: 9px;
++      font-weight: 800;
++    }
++
++    small {
++      font-size: 8px;
++      color: var(--pm-muted);
++      white-space: nowrap;
++      overflow: hidden;
++      text-overflow: ellipsis;
++    }
++  }
++}
++
++/* hero band used on the main column of Settings / Groups / Saved / Contacts */
++.pm-hero {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  padding: 16px 22px;
++  background: var(--pm-ink);
++
++  h2 {
++    font-size: 22px;
++    margin-top: 6px;
++  }
++}
++
++.pm-pane {
++  padding: 16px 22px;
++  display: flex;
++  flex-direction: column;
++  gap: 14px;
++}
++
++.pm-card {
++  background: var(--pm-ink);
++  border: 1px solid var(--pm-line);
++  padding: 14px 16px;
++
++  &--paper {
++    background: var(--pm-paper);
++    color: var(--pm-ink);
++    border-color: var(--pm-paper);
++  }
++
++  h3 {
++    font-size: 13px;
++    margin: 0 0 10px;
++  }
++}
++
++.pm-section {
++  padding: 16px 18px;
++  border-bottom: 1px solid var(--pm-line);
++
++  h2 {
++    font-size: 20px;
++    margin-top: 6px;
++  }
++
++  p {
++    margin: 8px 0 0;
++    font-size: 8px;
++    line-height: 1.5;
++    color: var(--pm-muted);
++  }
++}
++
++.pm-label {
++  font: 700 7px/1 var(--pm-font-ui);
++  letter-spacing: 0.14em;
++  text-transform: uppercase;
++  color: var(--pm-muted);
++}
++
++.pm-input {
++  width: 100%;
++  padding: 8px 10px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++  color: #fff;
++  font: 500 9px/1 var(--pm-font-ui);
++  outline: 0;
++
++  &:focus {
++    border-color: var(--pm-red);
++  }
++}
++
++.pm-tabs {
++  display: flex;
++  gap: 18px;
++  padding: 0 22px;
++  background: var(--pm-ink);
++  border-bottom: 1px solid var(--pm-line);
++
++  button {
++    padding: 10px 0;
++    background: transparent;
++    border: 0;
++    border-bottom: 2px solid transparent;
++    color: var(--pm-muted);
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.14em;
++    text-transform: uppercase;
++    cursor: pointer;
++
++    &.on {
++      color: var(--pm-red);
++      border-bottom-color: var(--pm-red);
++    }
++  }
+ }
+ 
+ * {
+-- 
+2.43.0
+
