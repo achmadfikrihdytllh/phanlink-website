@@ -193,3 +193,15 @@
   justify-content: center;
   text-decoration: none;
 }
+
+.unsave {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--pm-red);
+  cursor: pointer;
+}
+
+.newcol {
+  margin-top: 10px;
+}

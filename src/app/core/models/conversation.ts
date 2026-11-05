@@ -18,7 +18,11 @@ export interface Conversation {
   type: 'private' | 'group';
   name: string | null;
   avatar: string | null;
+  description?: string | null;
   created_by: number;
+  unread_count?: number;
+  is_muted?: boolean;
+  is_pinned?: boolean;
   participants: ConversationParticipant[];
   latest_message: LatestMessagePreview | null;
   created_at: string;

@@ -1,7 +1,11 @@
-import { Component, computed, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
+import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { SEARCH_HITS, SearchHit } from '../../core/mock/phantom-data';
+import { Conversation } from '../../core/models/conversation';
+import { SearchResponse } from '../../core/models/phantom';
+import { ConversationService } from '../../core/services/conversation';
+import { PhantomApi } from '../../core/services/phantom-api';
 import { PmIcon } from '../../shared/icon/icon';
 import { PageFrame } from '../../shared/page-frame/page-frame';
 
@@ -10,61 +14,160 @@ interface Segment {
   hit: boolean;
 }
 
+type MessageHit = SearchResponse['messages'][number];
+
+const RECENT_KEY = 'phanlink.recentSearches';
+
 @Component({
   selector: 'app-search',
-  imports: [RouterLink, PmIcon, PageFrame],
+  imports: [DatePipe, RouterLink, PmIcon, PageFrame],
   templateUrl: './search.html',
   styleUrl: './search.scss',
 })
-export class Search {
-  query = signal('Leblanc');
-  showMessages = signal(true);
+export class Search implements OnInit, OnDestroy {
+  private api = inject(PhantomApi);
+  private conversationService = inject(ConversationService);
+
+  private timer: ReturnType<typeof setTimeout> | null = null;
+
+  conversations = signal<Conversation[]>([]);
+  result = signal<SearchResponse | null>(null);
+  loading = signal(false);
+  failed = signal(false);
+  saveState = signal<'idle' | 'saved' | 'error'>('idle');
+
+  query = signal('');
+  conversationId = signal<number | null>(null);
   showFiles = signal(true);
-  recent = signal(['game plan', 'ramen']);
+  recent = signal<string[]>(this.loadRecent());
   pickedId = signal<number | null>(null);
 
-  results = computed(() => {
-    const q = this.query().trim().toLowerCase();
-    if (!q) return [];
-    return SEARCH_HITS.filter(
-      (h) =>
-        h.body.toLowerCase().includes(q) &&
-        (h.kind === 'message' ? this.showMessages() : this.showFiles()),
-    );
-  });
+  messages = computed(() => this.result()?.messages ?? []);
+  files = computed(() => this.result()?.files ?? []);
+  total = computed(() => this.messages().length + this.files().length);
 
-  messages = computed(() => this.results().filter((h) => h.kind === 'message'));
-  files = computed(() => this.results().filter((h) => h.kind === 'file'));
-
-  focus = computed<SearchHit | undefined>(
-    () => this.results().find((h) => h.id === this.pickedId()) ?? this.messages()[0],
+  focus = computed<MessageHit | undefined>(
+    () => this.messages().find((h) => h.message.id === this.pickedId()) ?? this.messages()[0],
   );
 
-  /** Split text around each match so the template can highlight it without innerHTML. */
-  segments(text: string): Segment[] {
-    const q = this.query().trim();
-    if (!q) return [{ text, hit: false }];
+  ngOnInit(): void {
+    this.conversationService.list().subscribe({
+      next: (r) => this.conversations.set(r.conversations),
+    });
+  }
 
-    const lower = text.toLowerCase();
+  ngOnDestroy(): void {
+    if (this.timer) clearTimeout(this.timer);
+  }
+
+  /** Wait for a pause in typing so each keystroke does not hit the API. */
+  onType(value: string): void {
+    this.query.set(value);
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = setTimeout(() => this.run(), 300);
+  }
+
+  run(): void {
+    const q = this.query().trim();
+
+    if (!q) {
+      this.result.set(null);
+      return;
+    }
+
+    this.loading.set(true);
+    this.failed.set(false);
+    this.saveState.set('idle');
+
+    this.api
+      .search({
+        q,
+        conversation_id: this.conversationId(),
+        types: this.showFiles() ? ['messages', 'files'] : ['messages'],
+      })
+      .subscribe({
+        next: (r) => {
+          // Drop a response that arrived after the user kept typing.
+          if (r.query !== this.query().trim()) return;
+          this.result.set(r);
+          this.pickedId.set(null);
+          this.loading.set(false);
+          this.remember(q);
+        },
+        error: () => {
+          this.failed.set(true);
+          this.loading.set(false);
+        },
+      });
+  }
+
+  setConversation(value: string): void {
+    this.conversationId.set(value ? Number(value) : null);
+    this.run();
+  }
+
+  setFiles(checked: boolean): void {
+    this.showFiles.set(checked);
+    this.run();
+  }
+
+  useRecent(term: string): void {
+    this.query.set(term);
+    this.run();
+  }
+
+  resetFilters(): void {
+    this.conversationId.set(null);
+    this.showFiles.set(true);
+    this.run();
+  }
+
+  saveFocused(): void {
+    const f = this.focus();
+    if (!f) return;
+
+    this.api.saveMessage(f.message.id).subscribe({
+      next: () => this.saveState.set('saved'),
+      error: () => this.saveState.set('error'),
+    });
+  }
+
+  /** Split text around each match so the template can highlight it without innerHTML. */
+  segments(text: string | null | undefined): Segment[] {
+    const source = text ?? '';
+    const q = this.query().trim();
+    if (!q) return [{ text: source, hit: false }];
+
+    const lower = source.toLowerCase();
     const needle = q.toLowerCase();
     const out: Segment[] = [];
     let from = 0;
 
     for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, from)) {
-      if (at > from) out.push({ text: text.slice(from, at), hit: false });
-      out.push({ text: text.slice(at, at + needle.length), hit: true });
+      if (at > from) out.push({ text: source.slice(from, at), hit: false });
+      out.push({ text: source.slice(at, at + needle.length), hit: true });
       from = at + needle.length;
     }
-    if (from < text.length) out.push({ text: text.slice(from), hit: false });
+    if (from < source.length) out.push({ text: source.slice(from), hit: false });
     return out;
   }
 
-  useRecent(term: string): void {
-    this.query.set(term);
+  private remember(q: string): void {
+    const next = [q, ...this.recent().filter((r) => r.toLowerCase() !== q.toLowerCase())].slice(0, 5);
+    this.recent.set(next);
+    try {
+      localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    } catch {
+      // Storage can be blocked (private mode); recents just won't persist.
+    }
   }
 
-  resetFilters(): void {
-    this.showMessages.set(true);
-    this.showFiles.set(true);
+  private loadRecent(): string[] {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
   }
 }

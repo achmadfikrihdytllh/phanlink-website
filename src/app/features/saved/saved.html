@@ -2,7 +2,7 @@
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Saved</h1>
-      <button class="pm-icon-btn" type="button" aria-label="New collection">
+      <button class="pm-icon-btn" type="button" aria-label="New collection" (click)="creating.set(!creating())">
         <pm-icon name="plus" [size]="12" />
       </button>
     </header>
@@ -12,18 +12,30 @@
         type="text"
         placeholder="Search your saved intel"
         [value]="query()"
-        (input)="query.set($any($event.target).value)"
+        (change)="search($any($event.target).value)"
       />
     </label>
+
     <div class="pm-eyebrow label">Your collections</div>
     <ul class="cols">
-      @for (c of collections; track c.name) {
+      <li>
+        <button
+          type="button"
+          class="pm-list-item"
+          [class.active]="collectionId() === null"
+          (click)="chooseCollection(null)"
+        >
+          <span class="pm-list-item__text"><strong>All saved messages</strong></span>
+          <span class="count">{{ total() }}</span>
+        </button>
+      </li>
+      @for (c of collections(); track c.id) {
         <li>
           <button
             type="button"
             class="pm-list-item"
-            [class.active]="collection() === c.name"
-            (click)="collection.set(c.name)"
+            [class.active]="collectionId() === c.id"
+            (click)="chooseCollection(c.id)"
           >
             <span class="pm-list-item__text"><strong>{{ c.name }}</strong></span>
             <span class="count">{{ c.count }}</span>
@@ -31,6 +43,19 @@
         </li>
       }
     </ul>
+
+    @if (creating()) {
+      <label class="pm-search newcol">
+        <input
+          type="text"
+          placeholder="Collection name"
+          [value]="newName()"
+          (input)="newName.set($any($event.target).value)"
+          (keydown.enter)="createCollection()"
+        />
+      </label>
+    }
+
     <p class="hint">Keep the good stuff close. Save a message from any conversation to find it here.</p>
   </div>
 
@@ -40,40 +65,45 @@
         <div class="pm-eyebrow">Personal archive / Only you can see this</div>
         <h2 class="pm-title">Saved messages</h2>
       </div>
-      <button class="pm-btn" type="button"><span>New collection</span></button>
+      <button class="pm-btn" type="button" (click)="creating.set(true)"><span>New collection</span></button>
     </header>
 
     <div class="tabrow">
       @for (t of tabs; track t.id) {
-        <button type="button" [class.on]="tab() === t.id" (click)="tab.set(t.id)">{{ t.label }}</button>
+        <button type="button" [class.on]="tab() === t.id" (click)="chooseTab(t.id)">{{ t.label }}</button>
       }
     </div>
 
     <div class="stream pm-scroll">
       @for (group of days(); track group.label) {
-        @if (group.items.length) {
-          <div class="day">{{ group.label }} / {{ group.items.length }} saves</div>
-          @for (s of group.items; track s.id) {
-            <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s)">
-              <header>
-                <span class="pm-avatar pm-avatar--light">{{ s.author.charAt(0) }}</span>
-                <strong>{{ s.author }}</strong>
-                <small>{{ s.group }} · {{ s.time }}</small>
+        <div class="day">{{ group.label }} / {{ group.items.length }} saves</div>
+        @for (s of group.items; track s.id) {
+          <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s)">
+            <header>
+              <span class="pm-avatar pm-avatar--light">{{ s.message.sender.name.charAt(0) }}</span>
+              <strong>{{ s.message.sender.name }}</strong>
+              <small>{{ s.conversation.name }} · {{ s.message.created_at | date: 'HH:mm' }}</small>
+              <button type="button" class="unsave" aria-label="Remove from saved" (click)="unsave(s); $event.stopPropagation()">
                 <pm-icon name="saved" [size]="12" />
-              </header>
-              <p>{{ s.body }}</p>
-              @if (s.attachment; as a) {
-                <div class="attach"><pm-icon name="file" [size]="12" />{{ a.name }}</div>
-              }
-              <footer>
-                <span class="tag">{{ s.collection }}</span>
-                <a routerLink="/messages" class="jump">Jump to message</a>
-              </footer>
-            </article>
-          }
+              </button>
+            </header>
+            <p>{{ s.message.body }}</p>
+            @for (a of s.message.attachments; track a.id) {
+              <div class="attach"><pm-icon name="file" [size]="12" />{{ a.file_path.split('/').pop() }}</div>
+            }
+            <footer>
+              <span class="tag">{{ s.collection?.name ?? 'Uncategorised' }}</span>
+              <a routerLink="/messages" class="jump">Jump to message</a>
+            </footer>
+          </article>
         }
       }
-      @if (!visible().length) {
+
+      @if (loading()) {
+        <p class="none">Loading…</p>
+      } @else if (failed()) {
+        <p class="none">Could not load saved messages.</p>
+      } @else if (!items().length) {
         <p class="none">Nothing saved here yet.</p>
       }
     </div>
@@ -82,23 +112,23 @@
   <div slot="aside">
     @if (focus(); as f) {
       <section class="pm-section">
-        <div class="pm-eyebrow">Saved attachment</div>
-        <h2 class="pm-title">{{ f.attachment ? 'The game plan' : 'Saved message' }}</h2>
+        <div class="pm-eyebrow">{{ f.message.attachments.length ? 'Saved attachment' : 'Saved message' }}</div>
+        <h2 class="pm-title">{{ f.message.attachments.length ? (f.message.attachments[0].file_path.split('/').pop()) : 'Saved message' }}</h2>
       </section>
 
       <section class="pm-section">
         <div class="preview">
           <pm-icon name="star" [size]="16" />
-          <h3 class="pm-title">{{ f.attachment ? 'Tomorrow’s game plan.' : f.collection }}</h3>
-          <p>{{ f.body }}</p>
+          <h3 class="pm-title">{{ f.collection?.name ?? 'Uncategorised' }}</h3>
+          <p>{{ f.message.body }}</p>
         </div>
         <div class="meta">
           <span class="pm-label">Original message</span>
-          <small>{{ f.author }} · {{ f.time }}</small>
+          <small>{{ f.message.sender.name }} · {{ f.message.created_at | date: 'MMM d, HH:mm' }}</small>
           <span class="pm-label">Collection</span>
-          <small>{{ f.collection }}</small>
+          <small>{{ f.collection?.name ?? 'Uncategorised' }}</small>
         </div>
-        @if (f.attachment) {
+        @if (f.message.attachments.length) {
           <button type="button" class="pm-btn side"><span>Download file</span></button>
         }
         <a routerLink="/messages" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>

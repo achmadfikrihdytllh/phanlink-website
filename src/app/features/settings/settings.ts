@@ -1,30 +1,23 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
+import { UserPrefs } from '../../core/models/phantom';
 import { AuthService } from '../../core/services/auth';
+import { PhantomApi } from '../../core/services/phantom-api';
 import { PmIcon, PmIconName } from '../../shared/icon/icon';
 import { PageFrame } from '../../shared/page-frame/page-frame';
 
-type Theme = 'phantom' | 'midnight' | 'paper';
-
-interface Prefs {
-  theme: Theme;
-  density: 'Comfortable' | 'Compact';
-  desktopNotifications: boolean;
-  messagePreviews: boolean;
-  whoCanMessage: 'Everyone' | 'Contacts only';
-  readReceipts: boolean;
-  showOnline: boolean;
-}
+type Theme = UserPrefs['theme'];
+type Prefs = UserPrefs;
 
 const STORAGE_KEY = 'phanlink.prefs';
 
 const DEFAULTS: Prefs = {
   theme: 'phantom',
-  density: 'Comfortable',
+  density: 'comfortable',
   desktopNotifications: true,
   messagePreviews: false,
-  whoCanMessage: 'Contacts only',
+  whoCanMessage: 'contacts',
   readReceipts: true,
   showOnline: true,
 };
@@ -37,6 +30,7 @@ const DEFAULTS: Prefs = {
 })
 export class Settings {
   private auth = inject(AuthService);
+  private api = inject(PhantomApi);
 
   readonly nav: { label: string; icon: PmIconName }[] = [
     { label: 'Your account', icon: 'user' },
@@ -55,6 +49,21 @@ export class Settings {
 
   prefs = signal<Prefs>(this.load());
   saved = signal(true);
+  saving = signal(false);
+  error = signal<string | null>(null);
+
+  constructor() {
+    // Server copy wins over the local cache; the cache only covers the first paint.
+    this.api.settings().subscribe({
+      next: (p) => {
+        this.prefs.set({ ...DEFAULTS, ...p });
+        this.cache();
+      },
+      error: () => {
+        /* offline or logged out: keep the cached values */
+      },
+    });
+  }
 
   user = this.auth.currentUser;
   displayName = computed(() => this.user()?.name ?? 'Ren Amamiya');
@@ -70,12 +79,22 @@ export class Settings {
   }
 
   save(): void {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.prefs()));
-    } catch {
-      // Storage can be blocked (private mode); keep the in-memory values.
-    }
-    this.saved.set(true);
+    this.saving.set(true);
+    this.error.set(null);
+    this.cache();
+
+    this.api.saveSettings(this.prefs()).subscribe({
+      next: (p) => {
+        this.prefs.set({ ...DEFAULTS, ...p });
+        this.cache();
+        this.saved.set(true);
+        this.saving.set(false);
+      },
+      error: () => {
+        this.error.set('Could not save. Check your connection and try again.');
+        this.saving.set(false);
+      },
+    });
   }
 
   reset(): void {
@@ -85,6 +104,14 @@ export class Settings {
 
   signOut(): void {
     this.auth.logout().subscribe();
+  }
+
+  private cache(): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.prefs()));
+    } catch {
+      // Storage can be blocked (private mode); the server copy is what matters.
+    }
   }
 
   private load(): Prefs {

@@ -8,27 +8,24 @@
 
     <div class="filter">
       <span class="pm-label dark">In conversation</span>
-      <select><option>All conversations</option></select>
-    </div>
-    <div class="filter">
-      <span class="pm-label dark">From</span>
-      <select><option>Anyone</option></select>
-    </div>
-    <div class="filter">
-      <span class="pm-label dark">Date range</span>
-      <select><option>Any time</option></select>
+      <select [value]="conversationId() ?? ''" (change)="setConversation($any($event.target).value)">
+        <option value="">All conversations</option>
+        @for (c of conversations(); track c.id) {
+          <option [value]="c.id">{{ c.name }}</option>
+        }
+      </select>
     </div>
 
     <div class="filter">
       <span class="pm-label dark">Content type</span>
       <label class="check">
-        <input type="checkbox" checked [disabled]="true" /> Messages
+        <input type="checkbox" checked disabled /> Messages
       </label>
       <label class="check">
         <input
           type="checkbox"
           [checked]="showFiles()"
-          (change)="showFiles.set($any($event.target).checked)"
+          (change)="setFiles($any($event.target).checked)"
         />
         Files &amp; attachments
       </label>
@@ -39,6 +36,8 @@
     <ul class="recent">
       @for (r of recent(); track r) {
         <li><button type="button" (click)="useRecent(r)">{{ r }}</button></li>
+      } @empty {
+        <li class="none-small">Nothing yet.</li>
       }
     </ul>
   </div>
@@ -58,33 +57,40 @@
         type="text"
         placeholder="Search everywhere"
         [value]="query()"
-        (input)="query.set($any($event.target).value)"
+        (input)="onType($any($event.target).value)"
         aria-label="Search everywhere"
       />
       @if (query()) {
-        <button type="button" aria-label="Clear search" (click)="query.set('')">
+        <button type="button" aria-label="Clear search" (click)="onType('')">
           <pm-icon name="close" [size]="12" />
         </button>
       }
     </div>
 
     <div class="results pm-scroll">
-      <div class="count">
-        {{ results().length }} results for “{{ query() }}”
-      </div>
+      @if (query().trim()) {
+        <div class="count">
+          {{ loading() ? 'Searching…' : total() + ' results for “' + query().trim() + '”' }}
+        </div>
+      }
 
       @if (messages().length) {
         <div class="group">Messages / {{ messages().length }}</div>
-        @for (h of messages(); track h.id) {
-          <button type="button" class="hit" [class.hit--on]="focus()?.id === h.id" (click)="pickedId.set(h.id)">
+        @for (h of messages(); track h.message.id) {
+          <button
+            type="button"
+            class="hit"
+            [class.hit--on]="focus()?.message?.id === h.message.id"
+            (click)="pickedId.set(h.message.id)"
+          >
             <span class="hit__head">
-              <span class="pm-avatar pm-avatar--light">{{ h.author.charAt(0) }}</span>
-              <strong>{{ h.author }}</strong>
-              <small>{{ h.where }}</small>
-              <time>{{ h.time }}</time>
+              <span class="pm-avatar pm-avatar--light">{{ h.message.sender.name.charAt(0) }}</span>
+              <strong>{{ h.message.sender.name }}</strong>
+              <small>{{ h.conversation.name }}</small>
+              <time>{{ h.message.created_at | date: 'MMM d, HH:mm' }}</time>
             </span>
             <span class="hit__body">
-              @for (s of segments(h.body); track $index) {
+              @for (s of segments(h.message.body); track $index) {
                 @if (s.hit) { <mark>{{ s.text }}</mark> } @else { {{ s.text }} }
               }
             </span>
@@ -94,23 +100,25 @@
 
       @if (files().length) {
         <div class="group">Files &amp; attachments / {{ files().length }}</div>
-        @for (h of files(); track h.id) {
+        @for (h of files(); track h.attachment.id) {
           <div class="hit hit--file">
             <pm-icon name="file" [size]="13" />
             <span class="hit__body">
               <strong>
-                @for (s of segments(h.body); track $index) {
+                @for (s of segments(h.attachment.name); track $index) {
                   @if (s.hit) { <mark>{{ s.text }}</mark> } @else { {{ s.text }} }
                 }
               </strong>
-              <small>{{ h.author }} · {{ h.where }}</small>
+              <small>{{ h.attachment.sender.name }} · {{ h.conversation.name }}</small>
             </span>
             <pm-icon name="download" [size]="12" />
           </div>
         }
       }
 
-      @if (!results().length) {
+      @if (failed()) {
+        <p class="none">Search failed. Try again.</p>
+      } @else if (query().trim() && !loading() && !total()) {
         <p class="none">No clues found. Try a different word.</p>
       }
     </div>
@@ -123,13 +131,19 @@
     </section>
     @if (focus(); as f) {
       <section class="pm-section">
-        <small class="where">{{ f.where }} · {{ f.time }}</small>
+        <small class="where">
+          {{ f.conversation.name }} · {{ f.message.created_at | date: 'MMM d, HH:mm' }}
+        </small>
         <div class="ctx">
-          <small>{{ f.author }}</small>
-          <p>{{ f.body }}</p>
+          <small>{{ f.message.sender.name }}</small>
+          <p>{{ f.message.body }}</p>
         </div>
         <a class="pm-btn jump" routerLink="/messages"><span>Jump to message</span></a>
-        <button type="button" class="pm-btn pm-btn--dark jump"><span>Save message</span></button>
+        <button type="button" class="pm-btn pm-btn--dark jump" (click)="saveFocused()">
+          <span>
+            {{ saveState() === 'saved' ? 'Saved' : saveState() === 'error' ? 'Could not save' : 'Save message' }}
+          </span>
+        </button>
       </section>
     }
   </div>

@@ -17,10 +17,10 @@
     </label>
     <div class="filters">
       <button type="button" [class.on]="filter() === 'all'" (click)="filter.set('all')">
-        All {{ contacts.length }}
+        All {{ contacts().length }}
       </button>
       <button type="button" [class.on]="filter() === 'online'" (click)="filter.set('online')">
-        Online {{ onlineCount }}
+        Online {{ onlineCount() }}
       </button>
     </div>
     <ul class="items">
@@ -30,12 +30,12 @@
             type="button"
             class="pm-list-item"
             [class.active]="c.id === selectedId()"
-            (click)="selectedId.set(c.id)"
+            (click)="select(c)"
           >
             <span class="pm-avatar pm-avatar--light">{{ c.name.charAt(0) }}</span>
             <span class="pm-list-item__text">
               <strong>{{ c.name }}</strong>
-              <small>{{ c.note }}</small>
+              <small>{{ statusText(c) }}</small>
             </span>
             @if (c.status === 'online') {
               <i class="dot"></i>
@@ -44,65 +44,91 @@
         </li>
       }
     </ul>
-    <button type="button" class="invite">+ Invite a confidant</button>
+    @if (loading()) {
+      <p class="invite">Loading…</p>
+    } @else if (failed()) {
+      <p class="invite">Could not load contacts.</p>
+    } @else if (!contacts().length) {
+      <p class="invite">No confidants yet.</p>
+    }
   </div>
 
   <div slot="main" class="page">
-    <header class="pm-hero">
-      <div>
-        <div class="pm-eyebrow">Your confidants / Contact details</div>
-        <h2 class="pm-title">{{ selected().name }}</h2>
-      </div>
-      <div class="actions">
-        <button type="button" class="pm-btn pm-btn--dark"><span>Call</span></button>
-        <a class="pm-btn" routerLink="/messages"><span>Message</span></a>
-      </div>
-    </header>
+    @if (selected(); as c) {
+      <header class="pm-hero">
+        <div>
+          <div class="pm-eyebrow">Your confidants / Contact details</div>
+          <h2 class="pm-title">{{ c.name }}</h2>
+        </div>
+        <div class="actions">
+          <button type="button" class="pm-btn pm-btn--dark"><span>Call</span></button>
+          <a class="pm-btn" routerLink="/messages"><span>Message</span></a>
+        </div>
+      </header>
 
-    <div class="profile">
-      <span class="pm-avatar pm-avatar--lg">{{ selected().name.charAt(0) }}</span>
-      <div>
-        <div class="pm-eyebrow code">Codename / {{ selected().codename }}</div>
-        <h2 class="pm-title">{{ selected().name }}</h2>
-        <small>{{ selected().handle }} · {{ selected().school }}</small>
-        <small class="status">{{ selected().status === 'online' ? 'Online · Ready for ramen' : selected().lastSeen }}</small>
-      </div>
-    </div>
-
-    <nav class="pm-tabs">
-      @for (t of tabs; track t) {
-        <button type="button" [class.on]="tab() === t" (click)="tab.set(t)">{{ t }}</button>
-      }
-    </nav>
-
-    <div class="pane pm-scroll">
-      <div class="paper">
-        <div class="pm-eyebrow">About</div>
-        <blockquote class="pm-title">“Got your back. Always.”</blockquote>
-        <p>Track team energy. Phantom Thief loyalty. Probably thinking about the next bowl of ramen.</p>
-
-        <div class="stats">
-          <div><span class="pm-label">Confidant since</span><strong>October 01</strong></div>
-          <div><span class="pm-label">Groups in common</span><strong>0{{ groups.length }} groups</strong></div>
-          <div><span class="pm-label">Message preference</span><strong>Direct messages</strong></div>
+      <div class="profile">
+        <span class="pm-avatar pm-avatar--lg">{{ c.name.charAt(0) }}</span>
+        <div>
+          <div class="pm-eyebrow code">Codename / {{ c.codename }}</div>
+          <h2 class="pm-title">{{ c.name }}</h2>
+          <small>{{ c.handle }}</small>
+          <small class="status">{{ statusText(c) }}</small>
         </div>
       </div>
 
-      <div class="exchange">
-        <div class="pm-eyebrow">Last exchange / Today</div>
-        <div class="msg"><small>{{ selected().codename }}</small>You up for ramen after this?</div>
-        <div class="msg msg--me"><small>You</small>After Leblanc. Let’s get the plan sorted first.</div>
-      </div>
+      <nav class="pm-tabs">
+        @for (t of tabs; track t) {
+          <button type="button" [class.on]="tab() === t" (click)="tab.set(t)">{{ t }}</button>
+        }
+      </nav>
 
-      <label class="note">
-        <span class="pm-label">Personal note / Only you</span>
-        <input
-          class="pm-input"
-          [value]="note()"
-          (input)="note.set($any($event.target).value)"
-        />
-      </label>
-    </div>
+      <div class="pane pm-scroll">
+        <div class="paper">
+          <div class="pm-eyebrow">About</div>
+          <blockquote class="pm-title">“{{ c.bio || 'No bio yet.' }}”</blockquote>
+
+          <div class="stats">
+            <div>
+              <span class="pm-label">Confidant since</span>
+              <strong>{{ c.contact_since | date: 'MMMM dd' }}</strong>
+            </div>
+            <div>
+              <span class="pm-label">Groups in common</span>
+              <strong>{{ detail()?.groups_in_common?.length ?? 0 }} groups</strong>
+            </div>
+            <div>
+              <span class="pm-label">Message preference</span>
+              <strong>Direct messages</strong>
+            </div>
+          </div>
+        </div>
+
+        @if (detail()?.last_exchange?.length) {
+          <div class="exchange">
+            <div class="pm-eyebrow">Last exchange</div>
+            @for (m of detail()!.last_exchange; track m.id) {
+              <div class="msg" [class.msg--me]="m.sender.id !== c.id">
+                <small>{{ m.sender.id === c.id ? c.codename : 'You' }}</small>{{ m.body }}
+              </div>
+            }
+          </div>
+        }
+
+        <label class="note">
+          <span class="pm-label">Personal note / Only you</span>
+          <input
+            class="pm-input"
+            placeholder="Add a note only you can see"
+            [value]="noteDraft()"
+            (input)="noteDraft.set($any($event.target).value)"
+            (blur)="saveNote()"
+            (keydown.enter)="saveNote()"
+          />
+        </label>
+      </div>
+    } @else if (!loading()) {
+      <div class="pane"><p>Pick a confidant to see their details.</p></div>
+    }
   </div>
 
   <div slot="aside">
@@ -110,36 +136,44 @@
       <div class="pm-eyebrow">Confidant dossier</div>
       <h2 class="pm-title">Shared intel</h2>
     </section>
-    <section class="pm-section">
-      <div class="pm-eyebrow">Groups in common / 0{{ groups.length }}</div>
-      @for (g of groups; track g.id) {
-        <a class="group" routerLink="/groups">
-          <span class="pm-avatar pm-avatar--light">{{ g.name.charAt(0) }}</span>
-          <span><strong>{{ g.name }}</strong><small>{{ g.members }} members</small></span>
-        </a>
-      }
-    </section>
-    <section class="pm-section">
-      <div class="pm-eyebrow">Shared files / 0{{ files.length }}</div>
-      @for (f of files; track f.name) {
-        <div class="group">
-          <pm-icon [name]="f.kind === 'image' ? 'image' : 'file'" [size]="12" />
-          <span><strong>{{ f.name }}</strong><small>{{ f.meta }}</small></span>
+
+    @if (selected(); as c) {
+      <section class="pm-section">
+        <div class="pm-eyebrow">Groups in common / {{ detail()?.groups_in_common?.length ?? 0 }}</div>
+        @for (g of detail()?.groups_in_common ?? []; track g.id) {
+          <a class="group" routerLink="/groups">
+            <span class="pm-avatar pm-avatar--light">{{ (g.name ?? '?').charAt(0) }}</span>
+            <span><strong>{{ g.name }}</strong><small>{{ g.participants.length }} members</small></span>
+          </a>
+        }
+      </section>
+      <section class="pm-section">
+        <div class="pm-eyebrow">Shared files / {{ detail()?.shared_files?.length ?? 0 }}</div>
+        @for (f of detail()?.shared_files ?? []; track f.id) {
+          <div class="group">
+            <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
+            <span>
+              <strong>{{ f.name }}</strong>
+              <small>{{ f.sender.name }} · {{ size(f.file_size) }}</small>
+            </span>
+          </div>
+        }
+      </section>
+      <section class="pm-section">
+        <div class="pref">
+          Mute notifications
+          <button
+            type="button"
+            class="pm-toggle"
+            [class.on]="c.is_muted"
+            (click)="toggleMute()"
+            aria-label="Mute notifications"
+          ></button>
         </div>
-      }
-    </section>
-    <section class="pm-section">
-      <div class="pref">
-        Mute notifications
-        <button
-          type="button"
-          class="pm-toggle"
-          [class.on]="muted()"
-          (click)="muted.set(!muted())"
-          aria-label="Mute notifications"
-        ></button>
-      </div>
-      <button type="button" class="block">Block contact</button>
-    </section>
+        <button type="button" class="block" (click)="toggleBlock()">
+          {{ c.is_blocked ? 'Unblock contact' : 'Block contact' }}
+        </button>
+      </section>
+    }
   </div>
 </pm-page-frame>

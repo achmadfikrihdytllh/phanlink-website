@@ -26,8 +26,8 @@
         <div class="pm-eyebrow">Preferences / Overview</div>
         <h2 class="pm-title">Make it yours.</h2>
       </div>
-      <button class="pm-btn" type="button" (click)="save()">
-        <span>{{ saved() ? 'Saved' : 'Save changes' }}</span>
+      <button class="pm-btn" type="button" [disabled]="saving()" (click)="save()">
+        <span>{{ saving() ? 'Saving…' : saved() ? 'Saved' : 'Save changes' }}</span>
       </button>
     </header>
 
@@ -82,8 +82,8 @@
             [ngModel]="prefs().density"
             (ngModelChange)="set('density', $event)"
           >
-            <option>Comfortable</option>
-            <option>Compact</option>
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
           </select>
         </div>
       </section>
@@ -130,8 +130,8 @@
             [ngModel]="prefs().whoCanMessage"
             (ngModelChange)="set('whoCanMessage', $event)"
           >
-            <option>Contacts only</option>
-            <option>Everyone</option>
+            <option value="contacts">Contacts only</option>
+            <option value="everyone">Everyone</option>
           </select>
         </div>
         <div class="line">
@@ -163,7 +163,7 @@
       </section>
 
       <footer class="foot">
-        <span>{{ saved() ? 'All changes saved on this device' : 'You have unsaved changes' }}</span>
+        <span>{{ error() ?? (saved() ? 'All changes saved' : 'You have unsaved changes') }}</span>
         <button type="button" class="link" (click)="reset()">Reset to defaults</button>
       </footer>
     </div>
