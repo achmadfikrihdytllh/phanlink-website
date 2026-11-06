@@ -153,3 +153,20 @@
 .actions {
   border-bottom: 0;
 }
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+a.file {
+  color: inherit;
+  text-decoration: none;
+}
+
+.invite {
+  width: 100%;
+  margin-top: 12px;
+  justify-content: center;
+}

@@ -227,3 +227,8 @@ mark {
   font-size: 8px;
   color: var(--pm-muted);
 }
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}

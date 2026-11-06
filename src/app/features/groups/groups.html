@@ -1,8 +1,8 @@
-<pm-page-frame listTone="dark">
+<pm-page-frame #frame listTone="dark" [(view)]="view">
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Groups</h1>
-      <button class="pm-icon-btn add" type="button" aria-label="New group">
+      <button class="pm-icon-btn add" type="button" aria-label="New group" (click)="dialog.set('group')">
         <pm-icon name="plus" [size]="12" />
       </button>
     </header>
@@ -23,7 +23,7 @@
             type="button"
             class="pm-list-item"
             [class.active]="g.id === selectedId()"
-            (click)="select(g)"
+            (click)="choose(g)"
           >
             <span class="pm-avatar pm-avatar--light">{{ initial(g.name) }}</span>
             <span class="pm-list-item__text">
@@ -51,7 +51,15 @@
           <div class="pm-eyebrow">Your groups / The hideout</div>
           <h2 class="pm-title">{{ g.name }}</h2>
         </div>
-        <a class="pm-btn" routerLink="/messages"><span>Open chat</span></a>
+        <div class="tools">
+          <button type="button" class="pm-back" aria-label="Back to groups" (click)="frame.back()">
+            <pm-icon name="back" [size]="12" />
+          </button>
+          <a class="pm-btn" routerLink="/messages" [queryParams]="{ c: g.id }"><span>Open chat</span></a>
+          <button type="button" class="pm-info" aria-label="Group info" (click)="frame.openInfo()">
+            <pm-icon name="more" [size]="13" />
+          </button>
+        </div>
       </header>
 
       <div class="banner">
@@ -101,6 +109,7 @@
       <h2 class="pm-title">Group intel</h2>
       @if (selected(); as g) {
         <p>{{ g.description || 'No description yet.' }}</p>
+        <button type="button" class="pm-btn invite" (click)="dialog.set('invite')"><span>Invite people</span></button>
       }
     </section>
 
@@ -132,16 +141,26 @@
       <section class="pm-section">
         <div class="pm-eyebrow">Shared intel / {{ files().length }} files</div>
         @for (f of files(); track f.id) {
-          <div class="file">
+          <a class="file" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
             <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
             <span>
               <strong>{{ f.name }}</strong>
               <small>{{ f.sender.name }} · {{ size(f.file_size) }}</small>
             </span>
             <pm-icon name="download" [size]="11" />
-          </div>
+          </a>
         }
       </section>
     }
   </div>
 </pm-page-frame>
+
+@if (dialog(); as mode) {
+  <pm-new-dialog
+    [mode]="mode"
+    [conversationId]="selectedId()"
+    [exclude]="memberIds()"
+    (done)="onDialogDone($event)"
+    (closed)="dialog.set(null)"
+  />
+}

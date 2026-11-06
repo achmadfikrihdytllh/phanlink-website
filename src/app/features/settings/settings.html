@@ -1,16 +1,21 @@
-<pm-page-frame>
+<pm-page-frame #frame [(view)]="view">
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Settings</h1>
     </header>
     <label class="pm-search">
       <pm-icon name="search" [size]="11" />
-      <input type="text" placeholder="Find a setting" />
+      <input
+        type="text"
+        placeholder="Find a setting"
+        [value]="filter()"
+        (input)="filter.set($any($event.target).value)"
+      />
     </label>
     <ul class="nav">
-      @for (item of nav; track item.label; let i = $index) {
+      @for (item of navVisible(); track item.id) {
         <li>
-          <button type="button" class="pm-list-item" [class.active]="i === 0">
+          <button type="button" class="pm-list-item" [class.active]="active() === item.id" (click)="go(item.id)">
             <pm-icon [name]="item.icon" [size]="12" />
             <span class="pm-list-item__text"><strong>{{ item.label }}</strong></span>
           </button>
@@ -22,17 +27,23 @@
 
   <div slot="main" class="page">
     <header class="pm-hero">
-      <div>
+      <button type="button" class="pm-back" aria-label="Back to settings" (click)="frame.back()">
+        <pm-icon name="back" [size]="12" />
+      </button>
+      <div class="grow">
         <div class="pm-eyebrow">Preferences / Overview</div>
         <h2 class="pm-title">Make it yours.</h2>
       </div>
       <button class="pm-btn" type="button" [disabled]="saving()" (click)="save()">
         <span>{{ saving() ? 'Saving…' : saved() ? 'Saved' : 'Save changes' }}</span>
       </button>
+      <button type="button" class="pm-info" aria-label="Account info" (click)="frame.openInfo()">
+        <pm-icon name="more" [size]="13" />
+      </button>
     </header>
 
     <div class="pm-pane pm-scroll">
-      <section class="pm-card pm-card--paper">
+      <section class="pm-card pm-card--paper" id="set-account">
         <h3 class="pm-title">Your account</h3>
         <div class="grid">
           <label>
@@ -44,13 +55,14 @@
             <input class="field" [value]="'@' + username()" readonly />
           </label>
           <label>
-            <span class="pm-label">Status</span>
-            <input class="field" value="Laying low" readonly />
+            <span class="pm-label">Bio</span>
+            <input class="field" [value]="user()?.bio || 'No bio yet'" readonly />
           </label>
         </div>
+        <a class="pm-btn edit" routerLink="/profile"><span>Edit profile and photo</span></a>
       </section>
 
-      <section class="pm-card">
+      <section class="pm-card" id="set-appearance">
         <h3 class="pm-title">Appearance</h3>
         <div class="line">
           <div>
@@ -88,7 +100,7 @@
         </div>
       </section>
 
-      <section class="pm-card">
+      <section class="pm-card" id="set-notifications">
         <h3 class="pm-title">Notifications</h3>
         <div class="line">
           <div>
@@ -118,7 +130,7 @@
         </div>
       </section>
 
-      <section class="pm-card">
+      <section class="pm-card" id="set-privacy">
         <h3 class="pm-title">Privacy &amp; security</h3>
         <div class="line">
           <div>
@@ -162,6 +174,19 @@
         </div>
       </section>
 
+      <section class="pm-card" id="set-storage">
+        <h3 class="pm-title">Storage &amp; data</h3>
+        <div class="line">
+          <div>
+            <strong>Clear data on this device</strong>
+            <small>Removes recent searches and the cached look. Your messages stay on the server.</small>
+          </div>
+          <button type="button" class="pm-btn" (click)="clearLocal()">
+            <span>{{ cleared() ? 'Cleared' : 'Clear' }}</span>
+          </button>
+        </div>
+      </section>
+
       <footer class="foot">
         <span>{{ error() ?? (saved() ? 'All changes saved' : 'You have unsaved changes') }}</span>
         <button type="button" class="link" (click)="reset()">Reset to defaults</button>
@@ -175,9 +200,10 @@
       <h2 class="pm-title">Account intel</h2>
     </section>
     <section class="pm-section who">
-      <span class="pm-avatar pm-avatar--lg">{{ displayName().charAt(0) }}</span>
+      <pm-avatar [name]="displayName()" [src]="user()?.avatar" [size]="56" />
       <h2 class="pm-title">{{ displayName() }}</h2>
-      <p>&#64;{{ username() }} · The Phantom Thieves</p>
+      <p>&#64;{{ username() }}</p>
+      <a class="pm-btn edit" routerLink="/profile"><span>Edit profile</span></a>
     </section>
     <section class="pm-section">
       <div class="pm-eyebrow">Trusted device</div>

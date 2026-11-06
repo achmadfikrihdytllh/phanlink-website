@@ -1,4 +1,4 @@
-<pm-page-frame>
+<pm-page-frame #frame [(view)]="view">
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Saved</h1>
@@ -61,7 +61,10 @@
 
   <div slot="main" class="page">
     <header class="pm-hero">
-      <div>
+      <button type="button" class="pm-back" aria-label="Back to collections" (click)="frame.back()">
+        <pm-icon name="back" [size]="12" />
+      </button>
+      <div class="grow">
         <div class="pm-eyebrow">Personal archive / Only you can see this</div>
         <h2 class="pm-title">Saved messages</h2>
       </div>
@@ -78,7 +81,7 @@
       @for (group of days(); track group.label) {
         <div class="day">{{ group.label }} / {{ group.items.length }} saves</div>
         @for (s of group.items; track s.id) {
-          <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s)">
+          <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s); frame.showInfo()">
             <header>
               <span class="pm-avatar pm-avatar--light">{{ s.message.sender.name.charAt(0) }}</span>
               <strong>{{ s.message.sender.name }}</strong>
@@ -93,7 +96,7 @@
             }
             <footer>
               <span class="tag">{{ s.collection?.name ?? 'Uncategorised' }}</span>
-              <a routerLink="/messages" class="jump">Jump to message</a>
+              <a routerLink="/messages" [queryParams]="{ c: s.conversation.id }" class="jump" (click)="$event.stopPropagation()">Jump to message</a>
             </footer>
           </article>
         }
@@ -129,9 +132,9 @@
           <small>{{ f.collection?.name ?? 'Uncategorised' }}</small>
         </div>
         @if (f.message.attachments.length) {
-          <button type="button" class="pm-btn side"><span>Download file</span></button>
+          <a class="pm-btn side" [href]="url(f.message.attachments[0].file_path)" target="_blank" rel="noopener" download><span>Download file</span></a>
         }
-        <a routerLink="/messages" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>
+        <a routerLink="/messages" [queryParams]="{ c: f.conversation.id }" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>
       </section>
     }
   </div>

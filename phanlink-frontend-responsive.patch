@@ -1,0 +1,3022 @@
+From d02b5813098b939c830759c44e327ab4d7069549 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Thu, 5 Nov 2026 18:14:20 +0700
+Subject: [PATCH] feat: profile editing, responsive phone/tablet layout, make
+ remaining UI controls functional
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013nAYnSuKh83gFwTMS3A7jm
+---
+ public/icon.svg                           |   1 +
+ public/manifest.webmanifest               |  16 ++
+ src/app/app.routes.ts                     |   5 +
+ src/app/core/services/appearance.ts       |  72 +++++++
+ src/app/core/services/auth.ts             |   6 +
+ src/app/core/services/message.ts          |  11 +
+ src/app/core/services/phantom-api.ts      |  16 ++
+ src/app/core/services/ui-state.ts         |   8 +
+ src/app/core/util/asset-url.ts            |  22 ++
+ src/app/features/contacts/contacts.html   |  42 +++-
+ src/app/features/contacts/contacts.scss   |  51 +++++
+ src/app/features/contacts/contacts.ts     |  73 ++++++-
+ src/app/features/groups/groups.html       |  31 ++-
+ src/app/features/groups/groups.scss       |  17 ++
+ src/app/features/groups/groups.ts         |  38 +++-
+ src/app/features/messages/messages.html   |  59 ++++--
+ src/app/features/messages/messages.scss   |  58 +++++-
+ src/app/features/messages/messages.ts     | 115 ++++++++++-
+ src/app/features/profile/profile.html     |  64 ++++++
+ src/app/features/profile/profile.scss     | 116 +++++++++++
+ src/app/features/profile/profile.ts       | 124 ++++++++++++
+ src/app/features/saved/saved.html         |  15 +-
+ src/app/features/saved/saved.scss         |   5 +
+ src/app/features/saved/saved.ts           |   9 +-
+ src/app/features/search/search.html       |  15 +-
+ src/app/features/search/search.scss       |   5 +
+ src/app/features/search/search.ts         |  11 +-
+ src/app/features/settings/settings.html   |  52 +++--
+ src/app/features/settings/settings.scss   |  12 ++
+ src/app/features/settings/settings.ts     |  52 ++++-
+ src/app/features/shell/shell.html         |  13 +-
+ src/app/features/shell/shell.scss         |  64 +++++-
+ src/app/features/shell/shell.ts           |  18 +-
+ src/app/shared/avatar/avatar.ts           |  44 ++++
+ src/app/shared/icon/icon.ts               |   2 +
+ src/app/shared/new-dialog/new-dialog.scss | 162 +++++++++++++++
+ src/app/shared/new-dialog/new-dialog.ts   | 236 ++++++++++++++++++++++
+ src/app/shared/page-frame/page-frame.scss |  84 ++++++--
+ src/app/shared/page-frame/page-frame.ts   |  80 ++++++--
+ src/index.html                            |   7 +-
+ src/styles.scss                           |  56 ++++-
+ 41 files changed, 1762 insertions(+), 125 deletions(-)
+ create mode 100644 public/icon.svg
+ create mode 100644 public/manifest.webmanifest
+ create mode 100644 src/app/core/services/appearance.ts
+ create mode 100644 src/app/core/services/ui-state.ts
+ create mode 100644 src/app/core/util/asset-url.ts
+ create mode 100644 src/app/features/profile/profile.html
+ create mode 100644 src/app/features/profile/profile.scss
+ create mode 100644 src/app/features/profile/profile.ts
+ create mode 100644 src/app/shared/avatar/avatar.ts
+ create mode 100644 src/app/shared/new-dialog/new-dialog.scss
+ create mode 100644 src/app/shared/new-dialog/new-dialog.ts
+
+diff --git a/public/icon.svg b/public/icon.svg
+new file mode 100644
+index 0000000..ad3b2c7
+--- /dev/null
++++ b/public/icon.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#e4182c"/><path fill="#fff" d="M256 90c22 85 128 128 128 256a128 128 0 0 1-256 0c0-64 42-85 42-149 21 21 42 43 42 85 21-43 42-107 44-192Z"/></svg>
+\ No newline at end of file
+diff --git a/public/manifest.webmanifest b/public/manifest.webmanifest
+new file mode 100644
+index 0000000..bfa0585
+--- /dev/null
++++ b/public/manifest.webmanifest
+@@ -0,0 +1,16 @@
++{
++  "name": "PhanLink",
++  "short_name": "PhanLink",
++  "start_url": "/",
++  "display": "standalone",
++  "background_color": "#0d0d0f",
++  "theme_color": "#e4182c",
++  "icons": [
++    {
++      "src": "icon.svg",
++      "sizes": "any",
++      "type": "image/svg+xml",
++      "purpose": "any maskable"
++    }
++  ]
++}
+\ No newline at end of file
+diff --git a/src/app/app.routes.ts b/src/app/app.routes.ts
+index f78927c..819cd7c 100644
+--- a/src/app/app.routes.ts
++++ b/src/app/app.routes.ts
+@@ -23,6 +23,11 @@ export const routes: Routes = [
+         loadComponent: () =>
+           import('./features/messages/messages').then((m) => m.Messages),
+       },
++      {
++        path: 'profile',
++        loadComponent: () =>
++          import('./features/profile/profile').then((m) => m.Profile),
++      },
+       {
+         path: 'settings',
+         loadComponent: () =>
+diff --git a/src/app/core/services/appearance.ts b/src/app/core/services/appearance.ts
+new file mode 100644
+index 0000000..3ce5230
+--- /dev/null
++++ b/src/app/core/services/appearance.ts
+@@ -0,0 +1,72 @@
++import { Injectable, inject } from '@angular/core';
++
++import { UserPrefs } from '../models/phantom';
++import { PhantomApi } from './phantom-api';
++
++export const PREFS_KEY = 'phanlink.prefs';
++
++const ACCENTS: Record<UserPrefs['theme'], { red: string; deep: string }> = {
++  phantom: { red: '#e4182c', deep: '#8f0f1b' },
++  midnight: { red: '#3b4a8c', deep: '#1f2850' },
++  paper: { red: '#8a5a2b', deep: '#53351a' },
++};
++
++/** Applies the saved theme and density to the whole app and reads notification prefs. */
++@Injectable({ providedIn: 'root' })
++export class Appearance {
++  private api = inject(PhantomApi);
++  private started = false;
++
++  /** Call once after login: paint from cache first, then let the server copy win. */
++  init(): void {
++    if (this.started) return;
++    this.started = true;
++
++    this.apply(this.cached());
++    this.api.settings().subscribe({
++      next: (p) => {
++        this.apply(p);
++        this.store(p);
++      },
++      error: () => {
++        /* offline or logged out: keep the cached look */
++      },
++    });
++  }
++
++  apply(prefs: Partial<UserPrefs> | null): void {
++    const root = document.documentElement;
++    const accent = ACCENTS[prefs?.theme ?? 'phantom'] ?? ACCENTS.phantom;
++
++    root.style.setProperty('--pm-red', accent.red);
++    root.style.setProperty('--pm-red-deep', accent.deep);
++    root.dataset['density'] = prefs?.density ?? 'comfortable';
++  }
++
++  store(prefs: UserPrefs): void {
++    try {
++      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
++    } catch {
++      // Storage can be blocked (private mode); the server copy is what matters.
++    }
++  }
++
++  cached(): Partial<UserPrefs> | null {
++    try {
++      const raw = localStorage.getItem(PREFS_KEY);
++      return raw ? (JSON.parse(raw) as Partial<UserPrefs>) : null;
++    } catch {
++      return null;
++    }
++  }
++
++  /** Show a desktop notification for a new message when the tab is in the background. */
++  notify(title: string, body: string): void {
++    const prefs = this.cached();
++    if (!prefs?.desktopNotifications) return;
++    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
++    if (!document.hidden) return;
++
++    new Notification(title, { body: prefs.messagePreviews ? body : 'New message' });
++  }
++}
+diff --git a/src/app/core/services/auth.ts b/src/app/core/services/auth.ts
+index 26edc5a..bb5cc74 100644
+--- a/src/app/core/services/auth.ts
++++ b/src/app/core/services/auth.ts
+@@ -47,6 +47,12 @@ export class AuthService {
+     );
+   }
+ 
++  /** Keep the signed-in user in sync after the profile changes. */
++  updateUser(user: User): void {
++    localStorage.setItem('user', JSON.stringify(user));
++    this.currentUser.set(user);
++  }
++
+   getToken(): string | null {
+     return localStorage.getItem('token');
+   }
+diff --git a/src/app/core/services/message.ts b/src/app/core/services/message.ts
+index 0d23479..fa423a3 100644
+--- a/src/app/core/services/message.ts
++++ b/src/app/core/services/message.ts
+@@ -29,6 +29,17 @@ export class MessageService {
+     );
+   }
+ 
++  sendFile(conversationId: number, file: File): Observable<{ data: Message }> {
++    const form = new FormData();
++    form.append('type', file.type.startsWith('image/') ? 'image' : 'file');
++    form.append('attachment', file);
++
++    return this.http.post<{ data: Message }>(
++      `${this.apiUrl}/conversations/${conversationId}/messages`,
++      form
++    );
++  }
++
+   markAsRead(conversationId: number): Observable<{ message: string }> {
+     return this.http.post<{ message: string }>(
+       `${this.apiUrl}/conversations/${conversationId}/read`,
+diff --git a/src/app/core/services/phantom-api.ts b/src/app/core/services/phantom-api.ts
+index 7b0d69d..6d98ecc 100644
+--- a/src/app/core/services/phantom-api.ts
++++ b/src/app/core/services/phantom-api.ts
+@@ -4,6 +4,7 @@ import { Observable, map } from 'rxjs';
+ 
+ import { environment } from '../../../environments/environment';
+ import { Conversation } from '../models/conversation';
++import { User } from '../models/user';
+ import {
+   Contact,
+   ContactDetail,
+@@ -25,6 +26,17 @@ export class PhantomApi {
+   private http = inject(HttpClient);
+   private api = environment.apiUrl;
+ 
++  // ---- profile & users ----
++  updateProfile(data: FormData): Observable<User> {
++    return this.http.post<{ user: User }>(`${this.api}/profile`, data).pipe(map((r) => r.user));
++  }
++
++  searchUsers(query: string): Observable<User[]> {
++    return this.http
++      .get<{ users: User[] }>(`${this.api}/users/search`, { params: { query } })
++      .pipe(map((r) => r.users));
++  }
++
+   // ---- groups ----
+   groups(): Observable<Conversation[]> {
+     return this.http.get<{ groups: Conversation[] }>(`${this.api}/groups`).pipe(map((r) => r.groups));
+@@ -68,6 +80,10 @@ export class PhantomApi {
+       .pipe(map((r) => r.contact));
+   }
+ 
++  removeContact(userId: number): Observable<void> {
++    return this.http.delete<void>(`${this.api}/contacts/${userId}`);
++  }
++
+   updateContact(
+     userId: number,
+     data: Partial<Pick<Contact, 'note' | 'is_muted' | 'is_blocked'>> & { nickname?: string | null },
+diff --git a/src/app/core/services/ui-state.ts b/src/app/core/services/ui-state.ts
+new file mode 100644
+index 0000000..cb60bcd
+--- /dev/null
++++ b/src/app/core/services/ui-state.ts
+@@ -0,0 +1,8 @@
++import { Injectable, signal } from '@angular/core';
++
++/** Small bits of layout state shared between the shell and the pages. */
++@Injectable({ providedIn: 'root' })
++export class UiState {
++  /** On phones the bottom tab bar hides while a chat or detail pane is open. */
++  hideTabs = signal(false);
++}
+diff --git a/src/app/core/util/asset-url.ts b/src/app/core/util/asset-url.ts
+new file mode 100644
+index 0000000..f172251
+--- /dev/null
++++ b/src/app/core/util/asset-url.ts
+@@ -0,0 +1,22 @@
++import { environment } from '../../../environments/environment';
++
++/**
++ * Backend files are stored with an absolute URL built from the server's APP_URL, which often
++ * differs from the address the app actually talks to (another port, a proxy). Rebuild the URL
++ * from the API origin so images and downloads always point at the right host.
++ */
++export function assetUrl(path: string | null | undefined): string | null {
++  if (!path) return null;
++
++  const origin = new URL(environment.apiUrl, window.location.origin).origin;
++
++  if (/^https?:\/\//i.test(path)) {
++    try {
++      return origin + new URL(path).pathname;
++    } catch {
++      return path;
++    }
++  }
++
++  return origin + (path.startsWith('/') ? path : `/storage/${path}`);
++}
+diff --git a/src/app/features/contacts/contacts.html b/src/app/features/contacts/contacts.html
+index 103e791..c634a0b 100644
+--- a/src/app/features/contacts/contacts.html
++++ b/src/app/features/contacts/contacts.html
+@@ -1,8 +1,8 @@
+-<pm-page-frame listTone="dark">
++<pm-page-frame #frame listTone="dark" [(view)]="view">
+   <div slot="list">
+     <header class="pm-list-head">
+       <h1 class="pm-title">Contacts</h1>
+-      <button class="pm-icon-btn add" type="button" aria-label="Invite a confidant">
++      <button class="pm-icon-btn add" type="button" aria-label="Add a confidant" (click)="adding.set(true)">
+         <pm-icon name="plus" [size]="12" />
+       </button>
+     </header>
+@@ -32,7 +32,7 @@
+             [class.active]="c.id === selectedId()"
+             (click)="select(c)"
+           >
+-            <span class="pm-avatar pm-avatar--light">{{ c.name.charAt(0) }}</span>
++            <pm-avatar class="av" [name]="c.name" [src]="c.avatar" />
+             <span class="pm-list-item__text">
+               <strong>{{ c.name }}</strong>
+               <small>{{ statusText(c) }}</small>
+@@ -56,18 +56,23 @@
+   <div slot="main" class="page">
+     @if (selected(); as c) {
+       <header class="pm-hero">
+-        <div>
++        <button type="button" class="pm-back" aria-label="Back to contacts" (click)="frame.back()">
++          <pm-icon name="back" [size]="12" />
++        </button>
++        <div class="hero__text">
+           <div class="pm-eyebrow">Your confidants / Contact details</div>
+           <h2 class="pm-title">{{ c.name }}</h2>
+         </div>
+         <div class="actions">
+-          <button type="button" class="pm-btn pm-btn--dark"><span>Call</span></button>
+-          <a class="pm-btn" routerLink="/messages"><span>Message</span></a>
++          <button type="button" class="pm-btn" [disabled]="opening()" (click)="message()"><span>Message</span></button>
++          <button type="button" class="pm-info" aria-label="Contact dossier" (click)="frame.openInfo()">
++            <pm-icon name="more" [size]="13" />
++          </button>
+         </div>
+       </header>
+ 
+       <div class="profile">
+-        <span class="pm-avatar pm-avatar--lg">{{ c.name.charAt(0) }}</span>
++        <pm-avatar [name]="c.name" [src]="c.avatar" [size]="64" />
+         <div>
+           <div class="pm-eyebrow code">Codename / {{ c.codename }}</div>
+           <h2 class="pm-title">{{ c.name }}</h2>
+@@ -83,6 +88,17 @@
+       </nav>
+ 
+       <div class="pane pm-scroll">
++        @if (tab() === 'Media') {
++          @for (f of detail()?.shared_files ?? []; track f.id) {
++            <a class="media" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
++              <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
++              <span><strong>{{ f.name }}</strong><small>{{ f.sender.name }} · {{ size(f.file_size) }}</small></span>
++              <pm-icon name="download" [size]="11" />
++            </a>
++          } @empty {
++            <p class="empty">Nothing shared with {{ c.name }} yet.</p>
++          }
++        } @else {
+         <div class="paper">
+           <div class="pm-eyebrow">About</div>
+           <blockquote class="pm-title">“{{ c.bio || 'No bio yet.' }}”</blockquote>
+@@ -125,6 +141,7 @@
+             (keydown.enter)="saveNote()"
+           />
+         </label>
++        }
+       </div>
+     } @else if (!loading()) {
+       <div class="pane"><p>Pick a confidant to see their details.</p></div>
+@@ -142,7 +159,7 @@
+         <div class="pm-eyebrow">Groups in common / {{ detail()?.groups_in_common?.length ?? 0 }}</div>
+         @for (g of detail()?.groups_in_common ?? []; track g.id) {
+           <a class="group" routerLink="/groups">
+-            <span class="pm-avatar pm-avatar--light">{{ (g.name ?? '?').charAt(0) }}</span>
++            <pm-avatar class="av" [name]="g.name" [src]="g.avatar" />
+             <span><strong>{{ g.name }}</strong><small>{{ g.participants.length }} members</small></span>
+           </a>
+         }
+@@ -150,13 +167,13 @@
+       <section class="pm-section">
+         <div class="pm-eyebrow">Shared files / {{ detail()?.shared_files?.length ?? 0 }}</div>
+         @for (f of detail()?.shared_files ?? []; track f.id) {
+-          <div class="group">
++          <a class="group" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
+             <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
+             <span>
+               <strong>{{ f.name }}</strong>
+               <small>{{ f.sender.name }} · {{ size(f.file_size) }}</small>
+             </span>
+-          </div>
++          </a>
+         }
+       </section>
+       <section class="pm-section">
+@@ -173,7 +190,12 @@
+         <button type="button" class="block" (click)="toggleBlock()">
+           {{ c.is_blocked ? 'Unblock contact' : 'Block contact' }}
+         </button>
++        <button type="button" class="block" (click)="remove()">Remove contact</button>
+       </section>
+     }
+   </div>
+ </pm-page-frame>
++
++@if (adding()) {
++  <pm-new-dialog mode="contact" (done)="onAdded($event)" (closed)="adding.set(false)" />
++}
+diff --git a/src/app/features/contacts/contacts.scss b/src/app/features/contacts/contacts.scss
+index 947203e..ed664f9 100644
+--- a/src/app/features/contacts/contacts.scss
++++ b/src/app/features/contacts/contacts.scss
+@@ -222,3 +222,54 @@
+   text-transform: uppercase;
+   cursor: pointer;
+ }
++
++.av {
++  background: #fff;
++  color: var(--pm-ink);
++}
++
++.hero__text {
++  flex: 1;
++  min-width: 0;
++}
++
++.actions {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++
++.media {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++  padding: 9px 10px;
++  margin-bottom: 8px;
++  background: var(--pm-ink-2);
++  border: 1px solid var(--pm-line);
++  color: #fff;
++  text-decoration: none;
++
++  span {
++    flex: 1;
++    min-width: 0;
++    display: flex;
++    flex-direction: column;
++    gap: 2px;
++  }
++
++  strong {
++    font-size: 9px;
++  }
++
++  small {
++    font-size: 7px;
++    color: var(--pm-muted);
++  }
++}
++
++.empty {
++  margin: 20px auto;
++  font: 700 9px/1.4 var(--pm-font-ui);
++  text-align: center;
++}
+diff --git a/src/app/features/contacts/contacts.ts b/src/app/features/contacts/contacts.ts
+index 1e1988f..c0339e3 100644
+--- a/src/app/features/contacts/contacts.ts
++++ b/src/app/features/contacts/contacts.ts
+@@ -1,24 +1,30 @@
+ import { DatePipe } from '@angular/common';
+ import { Component, OnInit, computed, inject, signal } from '@angular/core';
+-import { RouterLink } from '@angular/router';
++import { Router, RouterLink } from '@angular/router';
+ 
+ import { Contact, ContactDetail } from '../../core/models/phantom';
++import { ConversationService } from '../../core/services/conversation';
+ import { PhantomApi } from '../../core/services/phantom-api';
++import { assetUrl } from '../../core/util/asset-url';
++import { PmAvatar } from '../../shared/avatar/avatar';
+ import { PmIcon } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ type Filter = 'all' | 'online';
+ 
+ @Component({
+   selector: 'app-contacts',
+-  imports: [DatePipe, RouterLink, PmIcon, PageFrame],
++  imports: [DatePipe, RouterLink, PmIcon, PmAvatar, PageFrame, NewDialog],
+   templateUrl: './contacts.html',
+   styleUrl: './contacts.scss',
+ })
+ export class Contacts implements OnInit {
+   private api = inject(PhantomApi);
++  private conversations = inject(ConversationService);
++  private router = inject(Router);
+ 
+-  readonly tabs = ['Profile', 'Media', 'Links'];
++  readonly tabs = ['Profile', 'Media'];
+ 
+   contacts = signal<Contact[]>([]);
+   detail = signal<ContactDetail | null>(null);
+@@ -30,6 +36,9 @@ export class Contacts implements OnInit {
+   selectedId = signal<number | null>(null);
+   tab = signal('Profile');
+   noteDraft = signal('');
++  view = signal<FrameView>('list');
++  adding = signal(false);
++  opening = signal(false);
+ 
+   onlineCount = computed(() => this.contacts().filter((c) => c.status === 'online').length);
+ 
+@@ -51,7 +60,7 @@ export class Contacts implements OnInit {
+       next: (list) => {
+         this.contacts.set(list);
+         this.loading.set(false);
+-        if (list.length) this.select(list[0]);
++        if (list.length && !this.isPhone()) this.select(list[0], false);
+       },
+       error: () => {
+         this.failed.set(true);
+@@ -60,7 +69,8 @@ export class Contacts implements OnInit {
+     });
+   }
+ 
+-  select(c: Contact): void {
++  select(c: Contact, show = true): void {
++    if (show) this.view.set('main');
+     this.selectedId.set(c.id);
+     this.noteDraft.set(c.note ?? '');
+     this.detail.set(null);
+@@ -71,6 +81,57 @@ export class Contacts implements OnInit {
+     });
+   }
+ 
++  onAdded(result: DialogResult): void {
++    this.adding.set(false);
++    if (result.mode !== 'contact') return;
++
++    const added = result.contact;
++    this.contacts.update((list) => [added, ...list.filter((x) => x.id !== added.id)]);
++    this.select(added);
++  }
++
++  /** Open the chat with this contact, creating the private conversation if there is none yet. */
++  message(): void {
++    const c = this.selected();
++    if (!c || this.opening()) return;
++
++    const existing = this.detail()?.conversation_id;
++    if (existing) {
++      this.router.navigate(['/messages'], { queryParams: { c: existing } });
++      return;
++    }
++
++    this.opening.set(true);
++    this.conversations.startPrivate(c.id).subscribe({
++      next: (r) => this.router.navigate(['/messages'], { queryParams: { c: r.conversation.id } }),
++      error: () => this.opening.set(false),
++    });
++  }
++
++  remove(): void {
++    const c = this.selected();
++    if (!c || !confirm(`Remove ${c.name} from your contacts?`)) return;
++
++    this.api.removeContact(c.id).subscribe({
++      next: () => {
++        const rest = this.contacts().filter((x) => x.id !== c.id);
++        this.contacts.set(rest);
++        this.selectedId.set(null);
++        this.detail.set(null);
++        this.view.set('list');
++        if (rest.length && !this.isPhone()) this.select(rest[0], false);
++      },
++    });
++  }
++
++  isPhone(): boolean {
++    return typeof matchMedia === 'function' && matchMedia('(max-width: 720px)').matches;
++  }
++
++  url(path: string | null | undefined): string | null {
++    return assetUrl(path);
++  }
++
+   saveNote(): void {
+     const c = this.selected();
+     if (!c || this.noteDraft() === (c.note ?? '')) return;
+diff --git a/src/app/features/groups/groups.html b/src/app/features/groups/groups.html
+index 8ae1a0b..ee7b3d8 100644
+--- a/src/app/features/groups/groups.html
++++ b/src/app/features/groups/groups.html
+@@ -1,8 +1,8 @@
+-<pm-page-frame listTone="dark">
++<pm-page-frame #frame listTone="dark" [(view)]="view">
+   <div slot="list">
+     <header class="pm-list-head">
+       <h1 class="pm-title">Groups</h1>
+-      <button class="pm-icon-btn add" type="button" aria-label="New group">
++      <button class="pm-icon-btn add" type="button" aria-label="New group" (click)="dialog.set('group')">
+         <pm-icon name="plus" [size]="12" />
+       </button>
+     </header>
+@@ -23,7 +23,7 @@
+             type="button"
+             class="pm-list-item"
+             [class.active]="g.id === selectedId()"
+-            (click)="select(g)"
++            (click)="choose(g)"
+           >
+             <span class="pm-avatar pm-avatar--light">{{ initial(g.name) }}</span>
+             <span class="pm-list-item__text">
+@@ -51,7 +51,15 @@
+           <div class="pm-eyebrow">Your groups / The hideout</div>
+           <h2 class="pm-title">{{ g.name }}</h2>
+         </div>
+-        <a class="pm-btn" routerLink="/messages"><span>Open chat</span></a>
++        <div class="tools">
++          <button type="button" class="pm-back" aria-label="Back to groups" (click)="frame.back()">
++            <pm-icon name="back" [size]="12" />
++          </button>
++          <a class="pm-btn" routerLink="/messages" [queryParams]="{ c: g.id }"><span>Open chat</span></a>
++          <button type="button" class="pm-info" aria-label="Group info" (click)="frame.openInfo()">
++            <pm-icon name="more" [size]="13" />
++          </button>
++        </div>
+       </header>
+ 
+       <div class="banner">
+@@ -101,6 +109,7 @@
+       <h2 class="pm-title">Group intel</h2>
+       @if (selected(); as g) {
+         <p>{{ g.description || 'No description yet.' }}</p>
++        <button type="button" class="pm-btn invite" (click)="dialog.set('invite')"><span>Invite people</span></button>
+       }
+     </section>
+ 
+@@ -132,16 +141,26 @@
+       <section class="pm-section">
+         <div class="pm-eyebrow">Shared intel / {{ files().length }} files</div>
+         @for (f of files(); track f.id) {
+-          <div class="file">
++          <a class="file" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
+             <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
+             <span>
+               <strong>{{ f.name }}</strong>
+               <small>{{ f.sender.name }} · {{ size(f.file_size) }}</small>
+             </span>
+             <pm-icon name="download" [size]="11" />
+-          </div>
++          </a>
+         }
+       </section>
+     }
+   </div>
+ </pm-page-frame>
++
++@if (dialog(); as mode) {
++  <pm-new-dialog
++    [mode]="mode"
++    [conversationId]="selectedId()"
++    [exclude]="memberIds()"
++    (done)="onDialogDone($event)"
++    (closed)="dialog.set(null)"
++  />
++}
+diff --git a/src/app/features/groups/groups.scss b/src/app/features/groups/groups.scss
+index f1b7728..9d11d0f 100644
+--- a/src/app/features/groups/groups.scss
++++ b/src/app/features/groups/groups.scss
+@@ -153,3 +153,20 @@
+ .actions {
+   border-bottom: 0;
+ }
++
++.tools {
++  display: flex;
++  align-items: center;
++  gap: 8px;
++}
++
++a.file {
++  color: inherit;
++  text-decoration: none;
++}
++
++.invite {
++  width: 100%;
++  margin-top: 12px;
++  justify-content: center;
++}
+diff --git a/src/app/features/groups/groups.ts b/src/app/features/groups/groups.ts
+index 52f56d4..29d7a26 100644
+--- a/src/app/features/groups/groups.ts
++++ b/src/app/features/groups/groups.ts
+@@ -5,12 +5,14 @@ import { RouterLink } from '@angular/router';
+ import { Conversation } from '../../core/models/conversation';
+ import { SharedAttachment } from '../../core/models/phantom';
+ import { PhantomApi } from '../../core/services/phantom-api';
++import { assetUrl } from '../../core/util/asset-url';
+ import { PmIcon } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ @Component({
+   selector: 'app-groups',
+-  imports: [DatePipe, RouterLink, PmIcon, PageFrame],
++  imports: [DatePipe, RouterLink, PmIcon, PageFrame, NewDialog],
+   templateUrl: './groups.html',
+   styleUrl: './groups.scss',
+ })
+@@ -23,6 +25,8 @@ export class Groups implements OnInit {
+   query = signal('');
+   loading = signal(true);
+   failed = signal(false);
++  view = signal<FrameView>('list');
++  dialog = signal<'group' | 'invite' | null>(null);
+ 
+   selected = computed<Conversation | null>(
+     () => this.groups().find((g) => g.id === this.selectedId()) ?? null,
+@@ -42,7 +46,8 @@ export class Groups implements OnInit {
+       next: (list) => {
+         this.groups.set(list);
+         this.loading.set(false);
+-        if (list.length) this.select(list[0]);
++        // On a phone the list is the landing pane; only wider screens preselect a group.
++        if (list.length && !this.isPhone()) this.select(list[0], false);
+       },
+       error: () => {
+         this.failed.set(true);
+@@ -51,7 +56,13 @@ export class Groups implements OnInit {
+     });
+   }
+ 
+-  select(g: Conversation): void {
++  /** A tap on a group in the list. */
++  choose(g: Conversation): void {
++    this.select(g, true);
++  }
++
++  select(g: Conversation, show: boolean): void {
++    if (show) this.view.set('main');
+     this.selectedId.set(g.id);
+     this.files.set([]);
+ 
+@@ -71,6 +82,25 @@ export class Groups implements OnInit {
+     if (g) this.patch(g, { is_pinned: !g.is_pinned });
+   }
+ 
++  memberIds = computed(() => this.selected()?.participants.map((p) => p.id) ?? []);
++
++  onDialogDone(result: DialogResult): void {
++    this.dialog.set(null);
++    if (result.mode === 'contact') return;
++
++    const g = result.conversation;
++    this.groups.update((list) => (list.some((x) => x.id === g.id) ? list.map((x) => (x.id === g.id ? g : x)) : [g, ...list]));
++    this.select(g, true);
++  }
++
++  isPhone(): boolean {
++    return typeof matchMedia === 'function' && matchMedia('(max-width: 720px)').matches;
++  }
++
++  url(path: string | null | undefined): string | null {
++    return assetUrl(path);
++  }
++
+   initial(name: string | null | undefined): string {
+     return (name ?? '?').charAt(0).toUpperCase();
+   }
+diff --git a/src/app/features/messages/messages.html b/src/app/features/messages/messages.html
+index cc0a181..278b68c 100644
+--- a/src/app/features/messages/messages.html
++++ b/src/app/features/messages/messages.html
+@@ -1,9 +1,9 @@
+-<pm-page-frame>
++<pm-page-frame #frame [(view)]="view">
+   <!-- LIST -->
+   <div slot="list" class="list">
+     <header class="list__head">
+       <h1 class="pm-title list__title">Messages</h1>
+-      <button class="icon-btn" type="button" aria-label="New message">
++      <button class="icon-btn" type="button" aria-label="New message" (click)="composing.set(true)">
+         <pm-icon name="compose" [size]="12" />
+       </button>
+     </header>
+@@ -31,9 +31,9 @@
+             type="button"
+             class="convo"
+             [class.convo--active]="selected()?.id === c.id"
+-            (click)="open(c)"
++            (click)="choose(c)"
+           >
+-            <span class="avatar">{{ initial(c.name) }}</span>
++            <pm-avatar [name]="c.name" [src]="c.avatar" />
+             <span class="convo__text">
+               <strong>{{ c.name ?? 'Conversation' }}</strong>
+               <small>{{ previewOf(c) }}</small>
+@@ -41,6 +41,9 @@
+             @if (c.latest_message; as last) {
+               <time class="convo__time">{{ last.created_at | date: 'HH:mm' }}</time>
+             }
++            @if (c.unread_count) {
++              <span class="convo__badge">{{ c.unread_count }}</span>
++            }
+           </button>
+         </li>
+       } @empty {
+@@ -53,14 +56,21 @@
+   <div slot="main" class="chat">
+     @if (selected(); as convo) {
+       <header class="chat__head">
+-        <span class="avatar avatar--lg">{{ initial(convo.name) }}</span>
++        <button type="button" class="pm-back" aria-label="Back to conversations" (click)="frame.back()">
++          <pm-icon name="back" [size]="12" />
++        </button>
++        <pm-avatar [name]="convo.name" [src]="convo.avatar" [size]="30" />
+         <div class="chat__who">
+           <h2 class="pm-title">{{ convo.name }}</h2>
+           <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
+         </div>
+         <div class="chat__tools">
+-          <pm-icon name="phone" [size]="13" />
+-          <pm-icon name="search" [size]="13" />
++          <a routerLink="/search" [queryParams]="{ c: convo.id }" aria-label="Search this conversation">
++            <pm-icon name="search" [size]="13" />
++          </a>
++          <button type="button" class="pm-info" aria-label="Conversation info" (click)="frame.openInfo()">
++            <pm-icon name="more" [size]="13" />
++          </button>
+         </div>
+       </header>
+ 
+@@ -77,9 +87,24 @@
+             </span>
+             <div class="row__line">
+               @if (!isMine(m)) {
+-                <span class="avatar">{{ initial(m.sender.name) }}</span>
++                <pm-avatar [name]="m.sender.name" [src]="m.sender.avatar" />
+               }
+-              <p class="bubble">{{ m.body }}</p>
++              <div class="bubble">
++                @for (a of m.attachments; track a.id) {
++                  @if (m.type === 'image') {
++                    <a [href]="url(a.file_path)" target="_blank" rel="noopener">
++                      <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" />
++                    </a>
++                  } @else {
++                    <a class="bubble__file" [href]="url(a.file_path)" target="_blank" rel="noopener" download>
++                      <pm-icon name="file" [size]="12" /> {{ fileName(a.file_path) }}
++                    </a>
++                  }
++                }
++                @if (m.body) {
++                  <p>{{ m.body }}</p>
++                }
++              </div>
+             </div>
+           </div>
+         } @empty {
+@@ -92,6 +117,10 @@
+       <footer class="composer">
+         <span class="pm-eyebrow composer__label">Your next move.</span>
+         <div class="composer__box">
++          <label class="composer__attach" aria-label="Attach a file" [class.busy]="sending()">
++            <pm-icon name="link" [size]="13" />
++            <input type="file" hidden #file (change)="attach(file)" />
++          </label>
+           <input
+             type="text"
+             [placeholder]="'Message ' + convo.name"
+@@ -103,7 +132,7 @@
+             <span>Send</span>
+           </button>
+         </div>
+-        <small class="composer__hint">Enter to send</small>
++        <small class="composer__hint">{{ sendError() ?? (sending() ? 'Sending file…' : 'Enter to send') }}</small>
+       </footer>
+     } @else {
+       <div class="chat__empty">
+@@ -126,7 +155,7 @@
+         <ul class="members">
+           @for (p of convo.participants; track p.id) {
+             <li>
+-              <span class="avatar">{{ initial(p.name) }}</span>
++              <pm-avatar [name]="p.name" [src]="p.avatar" />
+               <span class="members__text">
+                 <strong>{{ p.name }}</strong>
+                 <small>{{ p.role === 'admin' ? 'Leader' : p.status }}</small>
+@@ -146,7 +175,9 @@
+               <strong>{{ fileName(f.file_path) }}</strong>
+               <small>{{ size(f.file_size) }}</small>
+             </span>
+-            <pm-icon name="download" [size]="11" />
++            <a [href]="url(f.file_path)" target="_blank" rel="noopener" download aria-label="Download file">
++              <pm-icon name="download" [size]="11" />
++            </a>
+           </div>
+         } @empty {
+           <p class="intel__empty">Nothing shared yet.</p>
+@@ -155,3 +186,7 @@
+     }
+   </div>
+ </pm-page-frame>
++
++@if (composing()) {
++  <pm-new-dialog mode="chat" (done)="onCreated($event)" (closed)="composing.set(false)" />
++}
+diff --git a/src/app/features/messages/messages.scss b/src/app/features/messages/messages.scss
+index 2ad975f..ca81fcd 100644
+--- a/src/app/features/messages/messages.scss
++++ b/src/app/features/messages/messages.scss
+@@ -153,6 +153,15 @@
+     font-size: 7px;
+     color: var(--pm-muted);
+   }
++
++  &__badge {
++    min-width: 14px;
++    padding: 3px 4px;
++    background: var(--pm-red);
++    color: #fff;
++    font: 800 7px/1 var(--pm-font-ui);
++    text-align: center;
++  }
+ }
+ 
+ .empty {
+@@ -193,8 +202,14 @@
+ 
+   &__tools {
+     display: flex;
++    align-items: center;
+     gap: 12px;
+     color: var(--pm-muted);
++
++    a {
++      color: inherit;
++      display: inline-flex;
++    }
+   }
+ 
+   &__empty {
+@@ -218,7 +233,7 @@
+   padding: 18px 22px;
+   display: flex;
+   flex-direction: column;
+-  gap: 14px;
++  gap: var(--pm-gap-feed, 14px);
+ 
+   &__note {
+     margin: auto;
+@@ -272,6 +287,29 @@
+   box-shadow: 4px 4px 0 var(--pm-ink);
+   transform: skewX(-6deg);
+   word-break: break-word;
++
++  p {
++    margin: 0;
++  }
++
++  &__img {
++    display: block;
++    max-width: 100%;
++    max-height: 160px;
++    margin-bottom: 6px;
++    object-fit: cover;
++  }
++
++  &__file {
++    display: flex;
++    align-items: center;
++    gap: 6px;
++    margin-bottom: 4px;
++    color: var(--pm-red);
++    font-weight: 700;
++    text-decoration: underline;
++    word-break: break-all;
++  }
+ }
+ 
+ .composer {
+@@ -302,6 +340,17 @@
+     }
+   }
+ 
++  &__attach {
++    display: grid;
++    place-items: center;
++    color: var(--pm-ink);
++    cursor: pointer;
++
++    &.busy {
++      opacity: 0.4;
++    }
++  }
++
+   &__hint {
+     display: block;
+     margin-top: 6px;
+@@ -311,6 +360,11 @@
+ }
+ 
+ /* ---------- aside ---------- */
++.file a {
++  color: inherit;
++  display: inline-flex;
++}
++
+ .intel {
+   &__section {
+     padding: 16px 18px;
+@@ -360,7 +414,7 @@
+     }
+   }
+ 
+-  .avatar {
++  pm-avatar {
+     background: #fff;
+     color: var(--pm-ink);
+   }
+diff --git a/src/app/features/messages/messages.ts b/src/app/features/messages/messages.ts
+index 0dc4212..e757e9e 100644
+--- a/src/app/features/messages/messages.ts
++++ b/src/app/features/messages/messages.ts
+@@ -13,6 +13,7 @@ import {
+ import { FormsModule } from '@angular/forms';
+ import { DatePipe } from '@angular/common';
+ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
++import { ActivatedRoute, RouterLink } from '@angular/router';
+ 
+ import { AuthService } from '../../core/services/auth';
+ import { ConversationService } from '../../core/services/conversation';
+@@ -20,12 +21,16 @@ import { EchoService } from '../../core/services/echo';
+ import { MessageService } from '../../core/services/message';
+ import { Conversation } from '../../core/models/conversation';
+ import { Message, MessageAttachment } from '../../core/models/message';
++import { Appearance } from '../../core/services/appearance';
++import { assetUrl } from '../../core/util/asset-url';
++import { PmAvatar } from '../../shared/avatar/avatar';
+ import { PmIcon } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ @Component({
+   selector: 'app-messages',
+-  imports: [FormsModule, DatePipe, PmIcon, PageFrame],
++  imports: [FormsModule, DatePipe, RouterLink, PmIcon, PmAvatar, PageFrame, NewDialog],
+   templateUrl: './messages.html',
+   styleUrl: './messages.scss',
+ })
+@@ -35,6 +40,8 @@ export class Messages implements OnInit, OnDestroy {
+   private echo = inject(EchoService);
+   private auth = inject(AuthService);
+   private destroyRef = inject(DestroyRef);
++  private route = inject(ActivatedRoute);
++  private appearance = inject(Appearance);
+ 
+   private feed = viewChild<ElementRef<HTMLElement>>('feed');
+ 
+@@ -44,6 +51,10 @@ export class Messages implements OnInit, OnDestroy {
+   draft = signal('');
+   query = signal('');
+   loading = signal(false);
++  sending = signal(false);
++  composing = signal(false);
++  sendError = signal<string | null>(null);
++  view = signal<FrameView>('list');
+ 
+   currentUserId = this.auth.currentUser()?.id ?? 0;
+ 
+@@ -66,6 +77,7 @@ export class Messages implements OnInit, OnDestroy {
+   );
+ 
+   private activeConversationId: number | null = null;
++  private requestedId: number | null = null;
+ 
+   constructor() {
+     // Keep the newest message in view whenever the thread changes.
+@@ -79,13 +91,25 @@ export class Messages implements OnInit, OnDestroy {
+   }
+ 
+   ngOnInit(): void {
++    // `/messages?c=ID` opens that conversation (used by Saved, Search and Contacts).
++    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
++      const id = Number(params.get('c'));
++      this.requestedId = id || null;
++      const wanted = this.conversations().find((c) => c.id === this.requestedId);
++      if (wanted) this.select(wanted, true);
++    });
++
+     this.conversationService
+       .list()
+       .pipe(takeUntilDestroyed(this.destroyRef))
+       .subscribe({
+         next: (res) => {
+           this.conversations.set(res.conversations);
+-          if (res.conversations.length) this.open(res.conversations[0]);
++
++          const wanted = res.conversations.find((c) => c.id === this.requestedId);
++          if (wanted) this.select(wanted, true);
++          // On a phone the list is the landing pane; only desktop and tablet preselect a chat.
++          else if (res.conversations.length && !this.isPhone()) this.select(res.conversations[0], false);
+         },
+       });
+   }
+@@ -94,19 +118,29 @@ export class Messages implements OnInit, OnDestroy {
+     if (this.activeConversationId) this.echo.leaveConversation(this.activeConversationId);
+   }
+ 
+-  open(conversation: Conversation): void {
++  /** A tap on a conversation in the list. */
++  choose(conversation: Conversation): void {
++    this.select(conversation, true);
++  }
++
++  select(conversation: Conversation, show: boolean): void {
++    if (show) this.view.set('main');
++    if (this.activeConversationId === conversation.id) return;
++
+     if (this.activeConversationId) this.echo.leaveConversation(this.activeConversationId);
+ 
+     this.activeConversationId = conversation.id;
+     this.selected.set(conversation);
+     this.messages.set([]);
+     this.loading.set(true);
++    this.patchConversation(conversation.id, { unread_count: 0 });
+ 
+     this.messageService
+       .getMessages(conversation.id)
+       .pipe(takeUntilDestroyed(this.destroyRef))
+       .subscribe({
+         next: (res) => {
++          if (this.activeConversationId !== conversation.id) return;
+           // API returns newest first; the feed reads oldest first.
+           this.messages.set([...res.messages].reverse());
+           this.loading.set(false);
+@@ -117,7 +151,10 @@ export class Messages implements OnInit, OnDestroy {
+     this.messageService.markAsRead(conversation.id).subscribe();
+ 
+     this.echo.listenToConversation(conversation.id, ({ message }: { message: Message }) => {
+-      this.messages.update((list) => [...list, message]);
++      this.append(message);
++      if (!this.isMine(message)) {
++        this.appearance.notify(message.sender?.name ?? 'Phanlink', message.body ?? 'Sent a file');
++      }
+       this.messageService.markAsRead(conversation.id).subscribe();
+     });
+   }
+@@ -130,7 +167,7 @@ export class Messages implements OnInit, OnDestroy {
+     this.draft.set('');
+     this.messageService.sendText(id, body).subscribe({
+       next: (res) => {
+-        this.messages.update((list) => [...list, res.data]);
++        this.append(res.data);
+         this.messageService.markAsRead(id).subscribe();
+       },
+       // Put the text back so a failed send is never silently lost.
+@@ -138,6 +175,68 @@ export class Messages implements OnInit, OnDestroy {
+     });
+   }
+ 
++  attach(input: HTMLInputElement): void {
++    const file = input.files?.[0];
++    const id = this.selected()?.id;
++    input.value = '';
++    if (!file || !id) return;
++
++    this.sending.set(true);
++    this.sendError.set(null);
++    this.messageService.sendFile(id, file).subscribe({
++      next: (res) => {
++        this.append(res.data);
++        this.sending.set(false);
++      },
++      error: () => {
++        this.sendError.set('Could not send the file (max 10 MB).');
++        this.sending.set(false);
++      },
++    });
++  }
++
++  onCreated(result: DialogResult): void {
++    this.composing.set(false);
++    if (result.mode === 'contact') return;
++
++    const c = result.conversation;
++    this.conversations.update((list) => (list.some((x) => x.id === c.id) ? list : [c, ...list]));
++    this.select(c, true);
++  }
++
++  isPhone(): boolean {
++    return typeof matchMedia === 'function' && matchMedia('(max-width: 720px)').matches;
++  }
++
++  url(path: string | null | undefined): string | null {
++    return assetUrl(path);
++  }
++
++  /** Add a message once (the realtime event and the HTTP reply can both deliver it) and refresh the list row. */
++  private append(message: Message): void {
++    this.messages.update((list) => (list.some((m) => m.id === message.id) ? list : [...list, message]));
++
++    this.conversations.update((list) => {
++      const row = list.find((c) => c.id === message.conversation_id);
++      if (!row) return list;
++      const updated: Conversation = {
++        ...row,
++        latest_message: {
++          id: message.id,
++          body: message.body,
++          type: message.type,
++          sender_id: message.sender?.id ?? 0,
++          created_at: message.created_at,
++        },
++      };
++      return [updated, ...list.filter((c) => c.id !== row.id)];
++    });
++  }
++
++  private patchConversation(id: number, patch: Partial<Conversation>): void {
++    this.conversations.update((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
++  }
++
+   isMine(m: Message): boolean {
+     return m.sender?.id === this.currentUserId;
+   }
+@@ -147,7 +246,9 @@ export class Messages implements OnInit, OnDestroy {
+   }
+ 
+   previewOf(c: Conversation): string {
+-    return c.latest_message?.body ?? 'No messages yet';
++    const last = c.latest_message;
++    if (!last) return 'No messages yet';
++    return last.body ?? (last.type === 'image' ? 'Sent a photo' : 'Sent a file');
+   }
+ 
+   fileName(path: string): string {
+diff --git a/src/app/features/profile/profile.html b/src/app/features/profile/profile.html
+new file mode 100644
+index 0000000..607d20d
+--- /dev/null
++++ b/src/app/features/profile/profile.html
+@@ -0,0 +1,64 @@
++<div class="page pm-scroll">
++  <header class="pm-hero">
++    <div>
++      <div class="pm-eyebrow">Your secret identity</div>
++      <h1 class="pm-title">Edit profile</h1>
++    </div>
++    <button class="pm-btn" type="button" [disabled]="saving() || !dirty()" (click)="save()">
++      <span>{{ saving() ? 'Saving…' : saved() && !dirty() ? 'Saved' : 'Save changes' }}</span>
++    </button>
++  </header>
++
++  <div class="body">
++    <section class="photo">
++      <pm-avatar [name]="name()" [src]="shownAvatar()" [size]="88" />
++      <div class="photo__actions">
++        <label class="pm-btn pm-btn--dark">
++          <span>Change photo</span>
++          <input type="file" accept="image/*" hidden #pick (change)="chooseFile(pick)" />
++        </label>
++        <small>JPG or PNG, up to 5 MB.</small>
++      </div>
++    </section>
++
++    <section class="form">
++      <label>
++        <span class="pm-label">Display name</span>
++        <input class="field" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event); edited()" />
++        @if (fieldErrors()['name']) { <em>{{ fieldErrors()['name'] }}</em> }
++      </label>
++
++      <label>
++        <span class="pm-label">Username</span>
++        <input class="field" maxlength="50" [ngModel]="username()" (ngModelChange)="username.set($event); edited()" />
++        @if (fieldErrors()['username']) { <em>{{ fieldErrors()['username'] }}</em> }
++      </label>
++
++      <label>
++        <span class="pm-label">Bio</span>
++        <textarea class="field" rows="3" maxlength="500" [ngModel]="bio()" (ngModelChange)="bio.set($event); edited()"></textarea>
++        @if (fieldErrors()['bio']) { <em>{{ fieldErrors()['bio'] }}</em> }
++      </label>
++
++      <label>
++        <span class="pm-label">Phone number</span>
++        <input class="field" maxlength="20" inputmode="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event); edited()" />
++        @if (fieldErrors()['phone_number']) { <em>{{ fieldErrors()['phone_number'] }}</em> }
++      </label>
++
++      <label>
++        <span class="pm-label">Email</span>
++        <input class="field" [value]="user()?.email ?? ''" readonly />
++      </label>
++
++      @if (error()) {
++        <p class="err">{{ error() }}</p>
++      }
++    </section>
++
++    <nav class="links">
++      <a routerLink="/settings"><pm-icon name="settings" [size]="12" /> Preferences</a>
++      <button type="button" (click)="signOut()"><pm-icon name="logout" [size]="12" /> Sign out</button>
++    </nav>
++  </div>
++</div>
+diff --git a/src/app/features/profile/profile.scss b/src/app/features/profile/profile.scss
+new file mode 100644
+index 0000000..18981f6
+--- /dev/null
++++ b/src/app/features/profile/profile.scss
+@@ -0,0 +1,116 @@
++:host {
++  display: block;
++  height: 100%;
++  background: var(--pm-ink);
++  color: #fff;
++}
++
++.page {
++  height: 100%;
++  display: flex;
++  flex-direction: column;
++}
++
++.pm-hero {
++  flex: none;
++}
++
++.body {
++  width: 100%;
++  max-width: 520px;
++  margin: 0 auto;
++  padding: 18px 20px 28px;
++  display: flex;
++  flex-direction: column;
++  gap: 18px;
++}
++
++.photo {
++  display: flex;
++  align-items: center;
++  gap: 16px;
++
++  pm-avatar {
++    border: 2px solid var(--pm-red);
++  }
++
++  &__actions {
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++
++    small {
++      font-size: 8px;
++      color: var(--pm-muted);
++    }
++
++    label {
++      cursor: pointer;
++    }
++  }
++}
++
++.form {
++  display: flex;
++  flex-direction: column;
++  gap: 12px;
++
++  label {
++    display: flex;
++    flex-direction: column;
++    gap: 5px;
++  }
++
++  em {
++    font: 700 8px/1.3 var(--pm-font-ui);
++    font-style: normal;
++    color: var(--pm-red);
++  }
++}
++
++.field {
++  padding: 9px 10px;
++  background: var(--pm-ink-2);
++  color: #fff;
++  border: 1px solid var(--pm-line);
++  font: 500 10px/1.4 var(--pm-font-ui);
++  outline: 0;
++  resize: vertical;
++
++  &:focus {
++    border-color: var(--pm-red);
++  }
++
++  &[readonly] {
++    color: var(--pm-muted);
++  }
++}
++
++.err {
++  margin: 0;
++  font: 700 9px/1.3 var(--pm-font-ui);
++  color: var(--pm-red);
++}
++
++.links {
++  display: flex;
++  gap: 18px;
++  padding-top: 8px;
++  border-top: 1px solid var(--pm-line);
++
++  a,
++  button {
++    display: inline-flex;
++    align-items: center;
++    gap: 6px;
++    padding: 0;
++    background: transparent;
++    border: 0;
++    color: #fff;
++    font: 800 8px/1 var(--pm-font-ui);
++    letter-spacing: 0.12em;
++    text-transform: uppercase;
++    text-decoration: none;
++    cursor: pointer;
++  }
++}
+diff --git a/src/app/features/profile/profile.ts b/src/app/features/profile/profile.ts
+new file mode 100644
+index 0000000..2924cfc
+--- /dev/null
++++ b/src/app/features/profile/profile.ts
+@@ -0,0 +1,124 @@
++import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
++import { FormsModule } from '@angular/forms';
++import { HttpErrorResponse } from '@angular/common/http';
++import { Router, RouterLink } from '@angular/router';
++
++import { AuthService } from '../../core/services/auth';
++import { PhantomApi } from '../../core/services/phantom-api';
++import { PmAvatar } from '../../shared/avatar/avatar';
++import { PmIcon } from '../../shared/icon/icon';
++
++const MAX_BYTES = 5 * 1024 * 1024;
++
++@Component({
++  selector: 'app-profile',
++  imports: [FormsModule, RouterLink, PmAvatar, PmIcon],
++  templateUrl: './profile.html',
++  styleUrl: './profile.scss',
++})
++export class Profile implements OnDestroy {
++  private auth = inject(AuthService);
++  private api = inject(PhantomApi);
++  private router = inject(Router);
++
++  user = this.auth.currentUser;
++
++  name = signal(this.user()?.name ?? '');
++  username = signal(this.user()?.username ?? '');
++  bio = signal(this.user()?.bio ?? '');
++  phone = signal(this.user()?.phone_number ?? '');
++
++  file = signal<File | null>(null);
++  preview = signal<string | null>(null);
++  saving = signal(false);
++  saved = signal(false);
++  error = signal<string | null>(null);
++  fieldErrors = signal<Record<string, string>>({});
++
++  /** What the avatar shows: the freshly chosen photo, else the saved one. */
++  shownAvatar = computed(() => this.preview() ?? this.user()?.avatar ?? null);
++
++  dirty = computed(() => {
++    const u = this.user();
++    return (
++      !!this.file() ||
++      this.name() !== (u?.name ?? '') ||
++      this.username() !== (u?.username ?? '') ||
++      this.bio() !== (u?.bio ?? '') ||
++      this.phone() !== (u?.phone_number ?? '')
++    );
++  });
++
++  ngOnDestroy(): void {
++    this.revoke();
++  }
++
++  chooseFile(input: HTMLInputElement): void {
++    const f = input.files?.[0];
++    input.value = '';
++    if (!f) return;
++
++    if (!f.type.startsWith('image/')) return this.error.set('Pick an image file.');
++    if (f.size > MAX_BYTES) return this.error.set('That photo is over 5 MB. Pick a smaller one.');
++
++    this.error.set(null);
++    this.revoke();
++    this.file.set(f);
++    this.preview.set(URL.createObjectURL(f));
++    this.saved.set(false);
++  }
++
++  save(): void {
++    if (this.saving() || !this.dirty()) return;
++
++    const form = new FormData();
++    form.append('name', this.name().trim());
++    form.append('username', this.username().trim());
++    form.append('bio', this.bio());
++    form.append('phone_number', this.phone().trim());
++    const f = this.file();
++    if (f) form.append('avatar', f);
++
++    this.saving.set(true);
++    this.error.set(null);
++    this.fieldErrors.set({});
++
++    this.api.updateProfile(form).subscribe({
++      next: (user) => {
++        // Merge so fields the profile endpoint does not return (e.g. email) are kept.
++        this.auth.updateUser({ ...this.auth.currentUser()!, ...user });
++        this.revoke();
++        this.file.set(null);
++        this.preview.set(null);
++        this.saving.set(false);
++        this.saved.set(true);
++      },
++      error: (e: HttpErrorResponse) => {
++        const errs: Record<string, string> = {};
++        for (const [k, v] of Object.entries(e.error?.errors ?? {})) errs[k] = (v as string[])[0];
++        this.fieldErrors.set(errs);
++        this.error.set(
++          Object.keys(errs).length ? 'Fix the highlighted fields.' : 'Could not save. Try again.',
++        );
++        this.saving.set(false);
++      },
++    });
++  }
++
++  edited(): void {
++    this.saved.set(false);
++  }
++
++  signOut(): void {
++    this.auth.logout().subscribe();
++  }
++
++  close(): void {
++    this.router.navigate(['/messages']);
++  }
++
++  private revoke(): void {
++    const url = this.preview();
++    if (url) URL.revokeObjectURL(url);
++  }
++}
+diff --git a/src/app/features/saved/saved.html b/src/app/features/saved/saved.html
+index ebbf89e..f426b7a 100644
+--- a/src/app/features/saved/saved.html
++++ b/src/app/features/saved/saved.html
+@@ -1,4 +1,4 @@
+-<pm-page-frame>
++<pm-page-frame #frame [(view)]="view">
+   <div slot="list">
+     <header class="pm-list-head">
+       <h1 class="pm-title">Saved</h1>
+@@ -61,7 +61,10 @@
+ 
+   <div slot="main" class="page">
+     <header class="pm-hero">
+-      <div>
++      <button type="button" class="pm-back" aria-label="Back to collections" (click)="frame.back()">
++        <pm-icon name="back" [size]="12" />
++      </button>
++      <div class="grow">
+         <div class="pm-eyebrow">Personal archive / Only you can see this</div>
+         <h2 class="pm-title">Saved messages</h2>
+       </div>
+@@ -78,7 +81,7 @@
+       @for (group of days(); track group.label) {
+         <div class="day">{{ group.label }} / {{ group.items.length }} saves</div>
+         @for (s of group.items; track s.id) {
+-          <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s)">
++          <article class="card" [class.card--on]="focus()?.id === s.id" (click)="pick(s); frame.showInfo()">
+             <header>
+               <span class="pm-avatar pm-avatar--light">{{ s.message.sender.name.charAt(0) }}</span>
+               <strong>{{ s.message.sender.name }}</strong>
+@@ -93,7 +96,7 @@
+             }
+             <footer>
+               <span class="tag">{{ s.collection?.name ?? 'Uncategorised' }}</span>
+-              <a routerLink="/messages" class="jump">Jump to message</a>
++              <a routerLink="/messages" [queryParams]="{ c: s.conversation.id }" class="jump" (click)="$event.stopPropagation()">Jump to message</a>
+             </footer>
+           </article>
+         }
+@@ -129,9 +132,9 @@
+           <small>{{ f.collection?.name ?? 'Uncategorised' }}</small>
+         </div>
+         @if (f.message.attachments.length) {
+-          <button type="button" class="pm-btn side"><span>Download file</span></button>
++          <a class="pm-btn side" [href]="url(f.message.attachments[0].file_path)" target="_blank" rel="noopener" download><span>Download file</span></a>
+         }
+-        <a routerLink="/messages" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>
++        <a routerLink="/messages" [queryParams]="{ c: f.conversation.id }" class="pm-btn pm-btn--dark side"><span>Open in conversation</span></a>
+       </section>
+     }
+   </div>
+diff --git a/src/app/features/saved/saved.scss b/src/app/features/saved/saved.scss
+index 3f69625..db6aa25 100644
+--- a/src/app/features/saved/saved.scss
++++ b/src/app/features/saved/saved.scss
+@@ -205,3 +205,8 @@
+ .newcol {
+   margin-top: 10px;
+ }
++
++.grow {
++  flex: 1;
++  min-width: 0;
++}
+diff --git a/src/app/features/saved/saved.ts b/src/app/features/saved/saved.ts
+index e53b164..d65e24e 100644
+--- a/src/app/features/saved/saved.ts
++++ b/src/app/features/saved/saved.ts
+@@ -4,8 +4,9 @@ import { RouterLink } from '@angular/router';
+ 
+ import { SavedCollection, SavedItem } from '../../core/models/phantom';
+ import { PhantomApi } from '../../core/services/phantom-api';
++import { assetUrl } from '../../core/util/asset-url';
+ import { PmIcon } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ type Tab = 'all' | 'messages' | 'files';
+ 
+@@ -37,6 +38,7 @@ export class Saved implements OnInit {
+   picked = signal<number | null>(null);
+   newName = signal('');
+   creating = signal(false);
++  view = signal<FrameView>('list');
+ 
+   /** Items grouped under "Today", "Yesterday" or the calendar date. */
+   days = computed(() => {
+@@ -86,6 +88,7 @@ export class Saved implements OnInit {
+ 
+   chooseCollection(id: number | null): void {
+     this.collectionId.set(id);
++    this.view.set('main');
+     this.reload();
+   }
+ 
+@@ -103,6 +106,10 @@ export class Saved implements OnInit {
+     this.picked.set(s.id);
+   }
+ 
++  url(path: string | null | undefined): string | null {
++    return assetUrl(path);
++  }
++
+   unsave(s: SavedItem): void {
+     this.api.unsave(s.id).subscribe({ next: () => this.reload() });
+   }
+diff --git a/src/app/features/search/search.html b/src/app/features/search/search.html
+index b7d4197..ca15add 100644
+--- a/src/app/features/search/search.html
++++ b/src/app/features/search/search.html
+@@ -1,4 +1,4 @@
+-<pm-page-frame>
++<pm-page-frame #frame [(view)]="view">
+   <div slot="list">
+     <header class="pm-list-head">
+       <h1 class="pm-title">Search</h1>
+@@ -44,11 +44,16 @@
+ 
+   <div slot="main" class="page">
+     <header class="pm-hero">
+-      <div>
++      <button type="button" class="pm-back" aria-label="Back to filters" (click)="frame.back()">
++        <pm-icon name="back" [size]="12" />
++      </button>
++      <div class="grow">
+         <div class="pm-eyebrow">Global search / Messages &amp; shared intel</div>
+         <h2 class="pm-title">Leave no clue behind.</h2>
+       </div>
+-      <pm-icon name="search" [size]="18" />
++      <button type="button" class="pm-info" aria-label="Filters" (click)="frame.back()">
++        <pm-icon name="more" [size]="13" />
++      </button>
+     </header>
+ 
+     <div class="bar">
+@@ -81,7 +86,7 @@
+             type="button"
+             class="hit"
+             [class.hit--on]="focus()?.message?.id === h.message.id"
+-            (click)="pickedId.set(h.message.id)"
++            (click)="pickedId.set(h.message.id); frame.showInfo()"
+           >
+             <span class="hit__head">
+               <span class="pm-avatar pm-avatar--light">{{ h.message.sender.name.charAt(0) }}</span>
+@@ -138,7 +143,7 @@
+           <small>{{ f.message.sender.name }}</small>
+           <p>{{ f.message.body }}</p>
+         </div>
+-        <a class="pm-btn jump" routerLink="/messages"><span>Jump to message</span></a>
++        <a class="pm-btn jump" routerLink="/messages" [queryParams]="{ c: f.conversation.id }"><span>Jump to message</span></a>
+         <button type="button" class="pm-btn pm-btn--dark jump" (click)="saveFocused()">
+           <span>
+             {{ saveState() === 'saved' ? 'Saved' : saveState() === 'error' ? 'Could not save' : 'Save message' }}
+diff --git a/src/app/features/search/search.scss b/src/app/features/search/search.scss
+index ba1a922..0506a38 100644
+--- a/src/app/features/search/search.scss
++++ b/src/app/features/search/search.scss
+@@ -227,3 +227,8 @@ mark {
+   font-size: 8px;
+   color: var(--pm-muted);
+ }
++
++.grow {
++  flex: 1;
++  min-width: 0;
++}
+diff --git a/src/app/features/search/search.ts b/src/app/features/search/search.ts
+index 6866fb5..b03e9f3 100644
+--- a/src/app/features/search/search.ts
++++ b/src/app/features/search/search.ts
+@@ -1,13 +1,13 @@
+ import { DatePipe } from '@angular/common';
+ import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+-import { RouterLink } from '@angular/router';
++import { ActivatedRoute, RouterLink } from '@angular/router';
+ 
+ import { Conversation } from '../../core/models/conversation';
+ import { SearchResponse } from '../../core/models/phantom';
+ import { ConversationService } from '../../core/services/conversation';
+ import { PhantomApi } from '../../core/services/phantom-api';
+ import { PmIcon } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ interface Segment {
+   text: string;
+@@ -27,6 +27,7 @@ const RECENT_KEY = 'phanlink.recentSearches';
+ export class Search implements OnInit, OnDestroy {
+   private api = inject(PhantomApi);
+   private conversationService = inject(ConversationService);
++  private route = inject(ActivatedRoute);
+ 
+   private timer: ReturnType<typeof setTimeout> | null = null;
+ 
+@@ -41,6 +42,7 @@ export class Search implements OnInit, OnDestroy {
+   showFiles = signal(true);
+   recent = signal<string[]>(this.loadRecent());
+   pickedId = signal<number | null>(null);
++  view = signal<FrameView>('main');
+ 
+   messages = computed(() => this.result()?.messages ?? []);
+   files = computed(() => this.result()?.files ?? []);
+@@ -51,6 +53,10 @@ export class Search implements OnInit, OnDestroy {
+   );
+ 
+   ngOnInit(): void {
++    // `/search?c=ID` pre-filters to one conversation (the search icon in a chat header).
++    const c = Number(this.route.snapshot.queryParamMap.get('c'));
++    if (c) this.conversationId.set(c);
++
+     this.conversationService.list().subscribe({
+       next: (r) => this.conversations.set(r.conversations),
+     });
+@@ -112,6 +118,7 @@ export class Search implements OnInit, OnDestroy {
+   }
+ 
+   useRecent(term: string): void {
++    this.view.set('main');
+     this.query.set(term);
+     this.run();
+   }
+diff --git a/src/app/features/settings/settings.html b/src/app/features/settings/settings.html
+index 308e504..b241dc6 100644
+--- a/src/app/features/settings/settings.html
++++ b/src/app/features/settings/settings.html
+@@ -1,16 +1,21 @@
+-<pm-page-frame>
++<pm-page-frame #frame [(view)]="view">
+   <div slot="list">
+     <header class="pm-list-head">
+       <h1 class="pm-title">Settings</h1>
+     </header>
+     <label class="pm-search">
+       <pm-icon name="search" [size]="11" />
+-      <input type="text" placeholder="Find a setting" />
++      <input
++        type="text"
++        placeholder="Find a setting"
++        [value]="filter()"
++        (input)="filter.set($any($event.target).value)"
++      />
+     </label>
+     <ul class="nav">
+-      @for (item of nav; track item.label; let i = $index) {
++      @for (item of navVisible(); track item.id) {
+         <li>
+-          <button type="button" class="pm-list-item" [class.active]="i === 0">
++          <button type="button" class="pm-list-item" [class.active]="active() === item.id" (click)="go(item.id)">
+             <pm-icon [name]="item.icon" [size]="12" />
+             <span class="pm-list-item__text"><strong>{{ item.label }}</strong></span>
+           </button>
+@@ -22,17 +27,23 @@
+ 
+   <div slot="main" class="page">
+     <header class="pm-hero">
+-      <div>
++      <button type="button" class="pm-back" aria-label="Back to settings" (click)="frame.back()">
++        <pm-icon name="back" [size]="12" />
++      </button>
++      <div class="grow">
+         <div class="pm-eyebrow">Preferences / Overview</div>
+         <h2 class="pm-title">Make it yours.</h2>
+       </div>
+       <button class="pm-btn" type="button" [disabled]="saving()" (click)="save()">
+         <span>{{ saving() ? 'Saving…' : saved() ? 'Saved' : 'Save changes' }}</span>
+       </button>
++      <button type="button" class="pm-info" aria-label="Account info" (click)="frame.openInfo()">
++        <pm-icon name="more" [size]="13" />
++      </button>
+     </header>
+ 
+     <div class="pm-pane pm-scroll">
+-      <section class="pm-card pm-card--paper">
++      <section class="pm-card pm-card--paper" id="set-account">
+         <h3 class="pm-title">Your account</h3>
+         <div class="grid">
+           <label>
+@@ -44,13 +55,14 @@
+             <input class="field" [value]="'@' + username()" readonly />
+           </label>
+           <label>
+-            <span class="pm-label">Status</span>
+-            <input class="field" value="Laying low" readonly />
++            <span class="pm-label">Bio</span>
++            <input class="field" [value]="user()?.bio || 'No bio yet'" readonly />
+           </label>
+         </div>
++        <a class="pm-btn edit" routerLink="/profile"><span>Edit profile and photo</span></a>
+       </section>
+ 
+-      <section class="pm-card">
++      <section class="pm-card" id="set-appearance">
+         <h3 class="pm-title">Appearance</h3>
+         <div class="line">
+           <div>
+@@ -88,7 +100,7 @@
+         </div>
+       </section>
+ 
+-      <section class="pm-card">
++      <section class="pm-card" id="set-notifications">
+         <h3 class="pm-title">Notifications</h3>
+         <div class="line">
+           <div>
+@@ -118,7 +130,7 @@
+         </div>
+       </section>
+ 
+-      <section class="pm-card">
++      <section class="pm-card" id="set-privacy">
+         <h3 class="pm-title">Privacy &amp; security</h3>
+         <div class="line">
+           <div>
+@@ -162,6 +174,19 @@
+         </div>
+       </section>
+ 
++      <section class="pm-card" id="set-storage">
++        <h3 class="pm-title">Storage &amp; data</h3>
++        <div class="line">
++          <div>
++            <strong>Clear data on this device</strong>
++            <small>Removes recent searches and the cached look. Your messages stay on the server.</small>
++          </div>
++          <button type="button" class="pm-btn" (click)="clearLocal()">
++            <span>{{ cleared() ? 'Cleared' : 'Clear' }}</span>
++          </button>
++        </div>
++      </section>
++
+       <footer class="foot">
+         <span>{{ error() ?? (saved() ? 'All changes saved' : 'You have unsaved changes') }}</span>
+         <button type="button" class="link" (click)="reset()">Reset to defaults</button>
+@@ -175,9 +200,10 @@
+       <h2 class="pm-title">Account intel</h2>
+     </section>
+     <section class="pm-section who">
+-      <span class="pm-avatar pm-avatar--lg">{{ displayName().charAt(0) }}</span>
++      <pm-avatar [name]="displayName()" [src]="user()?.avatar" [size]="56" />
+       <h2 class="pm-title">{{ displayName() }}</h2>
+-      <p>&#64;{{ username() }} · The Phantom Thieves</p>
++      <p>&#64;{{ username() }}</p>
++      <a class="pm-btn edit" routerLink="/profile"><span>Edit profile</span></a>
+     </section>
+     <section class="pm-section">
+       <div class="pm-eyebrow">Trusted device</div>
+diff --git a/src/app/features/settings/settings.scss b/src/app/features/settings/settings.scss
+index ce2d154..26ac566 100644
+--- a/src/app/features/settings/settings.scss
++++ b/src/app/features/settings/settings.scss
+@@ -148,3 +148,15 @@
+ .out {
+   margin-top: 10px;
+ }
++
++.edit {
++  width: 100%;
++  margin-top: 12px;
++  justify-content: center;
++  text-decoration: none;
++}
++
++.grow {
++  flex: 1;
++  min-width: 0;
++}
+diff --git a/src/app/features/settings/settings.ts b/src/app/features/settings/settings.ts
+index b2c5c8a..78dffd1 100644
+--- a/src/app/features/settings/settings.ts
++++ b/src/app/features/settings/settings.ts
+@@ -1,11 +1,13 @@
+ import { Component, computed, inject, signal } from '@angular/core';
+ import { FormsModule } from '@angular/forms';
++import { RouterLink } from '@angular/router';
+ 
+ import { UserPrefs } from '../../core/models/phantom';
+ import { AuthService } from '../../core/services/auth';
+ import { PhantomApi } from '../../core/services/phantom-api';
++import { PmAvatar } from '../../shared/avatar/avatar';
+ import { PmIcon, PmIconName } from '../../shared/icon/icon';
+-import { PageFrame } from '../../shared/page-frame/page-frame';
++import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
+ 
+ type Theme = UserPrefs['theme'];
+ type Prefs = UserPrefs;
+@@ -24,7 +26,7 @@ const DEFAULTS: Prefs = {
+ 
+ @Component({
+   selector: 'app-settings',
+-  imports: [FormsModule, PmIcon, PageFrame],
++  imports: [FormsModule, RouterLink, PmIcon, PmAvatar, PageFrame],
+   templateUrl: './settings.html',
+   styleUrl: './settings.scss',
+ })
+@@ -32,15 +34,43 @@ export class Settings {
+   private auth = inject(AuthService);
+   private api = inject(PhantomApi);
+ 
+-  readonly nav: { label: string; icon: PmIconName }[] = [
+-    { label: 'Your account', icon: 'user' },
+-    { label: 'Appearance', icon: 'palette' },
+-    { label: 'Notifications', icon: 'bell' },
+-    { label: 'Privacy & security', icon: 'lock' },
+-    { label: 'Storage & data', icon: 'storage' },
+-    { label: 'Keyboard shortcuts', icon: 'keyboard' },
++  readonly nav: { id: string; label: string; icon: PmIconName }[] = [
++    { id: 'account', label: 'Your account', icon: 'user' },
++    { id: 'appearance', label: 'Appearance', icon: 'palette' },
++    { id: 'notifications', label: 'Notifications', icon: 'bell' },
++    { id: 'privacy', label: 'Privacy & security', icon: 'lock' },
++    { id: 'storage', label: 'Storage & data', icon: 'storage' },
+   ];
+ 
++  view = signal<FrameView>('list');
++  filter = signal('');
++  active = signal('account');
++  cleared = signal(false);
++
++  navVisible = computed(() => {
++    const q = this.filter().trim().toLowerCase();
++    return q ? this.nav.filter((n) => n.label.toLowerCase().includes(q)) : this.nav;
++  });
++
++  /** Open a section: on phones this swaps to the main pane, everywhere it scrolls to the card. */
++  go(id: string): void {
++    this.active.set(id);
++    this.view.set('main');
++    // Wait a tick so the main pane is visible before scrolling to the card.
++    setTimeout(() => document.getElementById('set-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
++  }
++
++  /** Forget everything this browser cached: recent searches and the saved look. */
++  clearLocal(): void {
++    try {
++      localStorage.removeItem('phanlink.recentSearches');
++      localStorage.removeItem(STORAGE_KEY);
++    } catch {
++      // Storage can be blocked; nothing to clear then.
++    }
++    this.cleared.set(true);
++  }
++
+   readonly themes: { id: Theme; label: string; swatch: string }[] = [
+     { id: 'phantom', label: 'Phantom', swatch: '#e4182c' },
+     { id: 'midnight', label: 'Midnight', swatch: '#0d0d0f' },
+@@ -66,8 +96,8 @@ export class Settings {
+   }
+ 
+   user = this.auth.currentUser;
+-  displayName = computed(() => this.user()?.name ?? 'Ren Amamiya');
+-  username = computed(() => this.user()?.username ?? 'joker');
++  displayName = computed(() => this.user()?.name ?? '');
++  username = computed(() => this.user()?.username ?? '');
+ 
+   set<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
+     this.prefs.update((p) => ({ ...p, [key]: value }));
+diff --git a/src/app/features/shell/shell.html b/src/app/features/shell/shell.html
+index f61d0b4..063b013 100644
+--- a/src/app/features/shell/shell.html
++++ b/src/app/features/shell/shell.html
+@@ -35,11 +35,22 @@
+       >
+         <pm-icon name="settings" [size]="15" />
+       </a>
+-      <span class="rail__me" [title]="'Signed in'">{{ initial() }}</span>
++      <a class="rail__me" routerLink="/profile" routerLinkActive="active" title="Edit your profile" aria-label="Edit your profile">
++        <pm-avatar [name]="name()" [src]="user()?.avatar" [size]="26" />
++      </a>
+     </nav>
+ 
+     <main class="content">
+       <router-outlet />
+     </main>
+   </div>
++
++  <nav class="tabs" [class.tabs--hidden]="ui.hideTabs()" aria-label="Primary">
++    @for (t of tabs; track t.path) {
++      <a class="tabs__item" [routerLink]="t.path" routerLinkActive="active">
++        <pm-icon [name]="t.icon" [size]="16" />
++        <span>{{ t.label }}</span>
++      </a>
++    }
++  </nav>
+ </div>
+diff --git a/src/app/features/shell/shell.scss b/src/app/features/shell/shell.scss
+index 1227676..ab22add 100644
+--- a/src/app/features/shell/shell.scss
++++ b/src/app/features/shell/shell.scss
+@@ -1,12 +1,16 @@
+ :host {
+   display: block;
+   height: 100vh;
++  height: 100dvh;
++  overflow: hidden;
+   background: var(--pm-ink);
+   color: #fff;
+ }
+ 
+ .window {
+-  height: 100%;
++  /* zoom scales every pane on tablets and phones; divide the height back so it still fits. */
++  zoom: var(--z);
++  height: calc(100dvh / var(--z));
+   display: flex;
+   flex-direction: column;
+ }
+@@ -108,13 +112,18 @@
+   }
+ 
+   &__me {
+-    width: 22px;
+-    height: 22px;
+     display: grid;
+     place-items: center;
+-    border: 1px solid var(--pm-red);
+-    background: var(--pm-ink);
+-    font: 800 10px/1 var(--pm-font-ui);
++    border: 1px solid transparent;
++    color: #fff;
++
++    &.active {
++      border-color: var(--pm-red);
++    }
++
++    pm-avatar {
++      border-color: var(--pm-red);
++    }
+   }
+ }
+ 
+@@ -124,12 +133,49 @@
+   height: 100%;
+ }
+ 
++.tabs {
++  display: none;
++}
++
+ @media (max-width: 720px) {
++  .titlebar,
++  .rail {
++    display: none;
++  }
++
+   .body {
+-    grid-template-columns: 44px minmax(0, 1fr);
++    grid-template-columns: minmax(0, 1fr);
+   }
+ 
+-  .titlebar__controls {
+-    display: none;
++  .tabs {
++    flex: none;
++    display: flex;
++    background: #000;
++    border-top: 1px solid var(--pm-line);
++    padding-bottom: calc(env(safe-area-inset-bottom) / var(--z));
++
++    &--hidden {
++      display: none;
++    }
++
++    &__item {
++      flex: 1;
++      display: flex;
++      flex-direction: column;
++      align-items: center;
++      gap: 3px;
++      padding: 7px 0 6px;
++      color: var(--pm-muted);
++      font: 700 6px/1 var(--pm-font-ui);
++      letter-spacing: 0.06em;
++      text-transform: uppercase;
++      text-decoration: none;
++      border-top: 2px solid transparent;
++
++      &.active {
++        color: #fff;
++        border-top-color: var(--pm-red);
++      }
++    }
+   }
+ }
+diff --git a/src/app/features/shell/shell.ts b/src/app/features/shell/shell.ts
+index 1d27e93..563f192 100644
+--- a/src/app/features/shell/shell.ts
++++ b/src/app/features/shell/shell.ts
+@@ -1,7 +1,10 @@
+ import { Component, computed, inject } from '@angular/core';
+ import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+ 
++import { Appearance } from '../../core/services/appearance';
+ import { AuthService } from '../../core/services/auth';
++import { UiState } from '../../core/services/ui-state';
++import { PmAvatar } from '../../shared/avatar/avatar';
+ import { PmIcon, PmIconName } from '../../shared/icon/icon';
+ 
+ interface RailItem {
+@@ -12,12 +15,13 @@ interface RailItem {
+ 
+ @Component({
+   selector: 'app-shell',
+-  imports: [RouterOutlet, RouterLink, RouterLinkActive, PmIcon],
++  imports: [RouterOutlet, RouterLink, RouterLinkActive, PmIcon, PmAvatar],
+   templateUrl: './shell.html',
+   styleUrl: './shell.scss',
+ })
+ export class Shell {
+   private auth = inject(AuthService);
++  protected ui = inject(UiState);
+ 
+   readonly items: RailItem[] = [
+     { path: '/messages', label: 'Messages', icon: 'chat' },
+@@ -27,5 +31,15 @@ export class Shell {
+     { path: '/search', label: 'Search', icon: 'search' },
+   ];
+ 
+-  initial = computed(() => (this.auth.currentUser()?.name ?? 'R').charAt(0).toUpperCase());
++  readonly settings: RailItem = { path: '/settings', label: 'Settings', icon: 'settings' };
++
++  /** Phone tab bar: the same six destinations as the desktop rail. */
++  readonly tabs: RailItem[] = [...this.items, this.settings];
++
++  user = this.auth.currentUser;
++  name = computed(() => this.user()?.name ?? '');
++
++  constructor() {
++    inject(Appearance).init();
++  }
+ }
+diff --git a/src/app/shared/avatar/avatar.ts b/src/app/shared/avatar/avatar.ts
+new file mode 100644
+index 0000000..440661f
+--- /dev/null
++++ b/src/app/shared/avatar/avatar.ts
+@@ -0,0 +1,44 @@
++import { Component, computed, input } from '@angular/core';
++
++import { assetUrl } from '../../core/util/asset-url';
++
++/** Round-ish avatar: the user's photo when there is one, otherwise their initial. */
++@Component({
++  selector: 'pm-avatar',
++  template: `
++    @if (url(); as src) {
++      <img [src]="src" [alt]="name()" />
++    } @else {
++      {{ initial() }}
++    }
++  `,
++  styles: `
++    :host {
++      flex: none;
++      display: inline-grid;
++      place-items: center;
++      overflow: hidden;
++      width: var(--pm-av, 22px);
++      height: var(--pm-av, 22px);
++      background: var(--pm-ink);
++      color: #fff;
++      border: 1px solid var(--pm-ink);
++      font: 800 calc(var(--pm-av, 22px) * 0.45) / 1 var(--pm-font-ui);
++    }
++    img {
++      width: 100%;
++      height: 100%;
++      object-fit: cover;
++      display: block;
++    }
++  `,
++  host: { '[style.--pm-av.px]': 'size()' },
++})
++export class PmAvatar {
++  name = input<string | null | undefined>('');
++  src = input<string | null | undefined>(null);
++  size = input(22);
++
++  url = computed(() => assetUrl(this.src()));
++  initial = computed(() => (this.name() ?? '?').charAt(0).toUpperCase());
++}
+diff --git a/src/app/shared/icon/icon.ts b/src/app/shared/icon/icon.ts
+index c3cc37c..bceec9a 100644
+--- a/src/app/shared/icon/icon.ts
++++ b/src/app/shared/icon/icon.ts
+@@ -17,6 +17,7 @@ export type PmIconName =
+   | 'file'
+   | 'download'
+   | 'arrow'
++  | 'back'
+   | 'star'
+   | 'pin'
+   | 'link'
+@@ -54,6 +55,7 @@ const PATHS: Record<PmIconName, string> = {
+   file: 'M7 3h7l4 4v14H7V3Zm7 0v4h4',
+   download: 'M12 4v11m-4-4 4 4 4-4M5 20h14',
+   arrow: 'M7 17 17 7M9 7h8v8',
++  back: 'M19 12H5m6-6-6 6 6 6',
+   star: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3Z',
+   pin: 'M9 4h6l-1 6 3 3H7l3-3-1-6Zm3 9v7',
+   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1',
+diff --git a/src/app/shared/new-dialog/new-dialog.scss b/src/app/shared/new-dialog/new-dialog.scss
+new file mode 100644
+index 0000000..224f48a
+--- /dev/null
++++ b/src/app/shared/new-dialog/new-dialog.scss
+@@ -0,0 +1,162 @@
++:host {
++  display: contents;
++  font-family: var(--pm-font-ui);
++}
++
++.overlay {
++  position: fixed;
++  inset: 0;
++  z-index: 100;
++  display: grid;
++  place-items: center;
++  padding: 16px;
++  background: rgba(0, 0, 0, 0.65);
++}
++
++.box {
++  width: 100%;
++  max-width: 340px;
++  max-height: 90%;
++  display: flex;
++  flex-direction: column;
++  gap: 10px;
++  padding: 16px;
++  background: var(--pm-paper);
++  color: var(--pm-ink);
++  border: 2px solid var(--pm-ink);
++}
++
++header {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++
++  h2 {
++    font-size: 20px;
++  }
++}
++
++.x {
++  width: 22px;
++  height: 22px;
++  display: grid;
++  place-items: center;
++  background: var(--pm-ink);
++  color: #fff;
++  border: 0;
++  cursor: pointer;
++}
++
++.field {
++  display: flex;
++  flex-direction: column;
++  gap: 4px;
++
++  input {
++    padding: 8px;
++    background: #fff;
++    color: var(--pm-ink);
++    border: 1px solid var(--pm-ink);
++    font: 500 10px/1 var(--pm-font-ui);
++    outline: 0;
++  }
++}
++
++.chips {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  display: flex;
++  flex-wrap: wrap;
++  gap: 5px;
++
++  li {
++    display: inline-flex;
++    align-items: center;
++    gap: 4px;
++    padding: 3px 6px;
++    background: var(--pm-ink);
++    color: #fff;
++    font: 700 8px/1 var(--pm-font-ui);
++  }
++
++  button {
++    background: transparent;
++    border: 0;
++    color: var(--pm-red);
++    cursor: pointer;
++    font-size: 11px;
++    line-height: 1;
++  }
++}
++
++.results {
++  list-style: none;
++  margin: 0;
++  padding: 0;
++  flex: 1;
++  min-height: 60px;
++  max-height: 200px;
++  overflow-y: auto;
++  border: 1px solid var(--pm-line-dark);
++
++  button {
++    width: 100%;
++    display: flex;
++    align-items: center;
++    gap: 8px;
++    padding: 7px 8px;
++    background: transparent;
++    border: 0;
++    border-bottom: 1px solid var(--pm-line-dark);
++    color: inherit;
++    text-align: left;
++    cursor: pointer;
++
++    &:hover {
++      background: var(--pm-paper-2);
++    }
++
++    span:first-of-type + span,
++    span {
++      display: flex;
++      flex-direction: column;
++    }
++
++    strong {
++      font-size: 10px;
++    }
++
++    small {
++      font-size: 8px;
++      color: #55555c;
++    }
++  }
++
++  .tick {
++    margin-left: auto;
++    font: 800 7px/1 var(--pm-font-ui);
++    letter-spacing: 0.1em;
++    text-transform: uppercase;
++    color: var(--pm-red);
++  }
++}
++
++.none {
++  padding: 14px;
++  font-size: 9px;
++  color: #55555c;
++  text-align: center;
++}
++
++.err {
++  margin: 0;
++  font-size: 9px;
++  font-weight: 700;
++  color: var(--pm-red);
++}
++
++footer {
++  display: flex;
++  justify-content: flex-end;
++}
+diff --git a/src/app/shared/new-dialog/new-dialog.ts b/src/app/shared/new-dialog/new-dialog.ts
+new file mode 100644
+index 0000000..c00239e
+--- /dev/null
++++ b/src/app/shared/new-dialog/new-dialog.ts
+@@ -0,0 +1,236 @@
++import { Component, OnDestroy, computed, inject, input, output, signal } from '@angular/core';
++
++import { Conversation } from '../../core/models/conversation';
++import { Contact } from '../../core/models/phantom';
++import { User } from '../../core/models/user';
++import { ConversationService } from '../../core/services/conversation';
++import { PhantomApi } from '../../core/services/phantom-api';
++import { PmAvatar } from '../avatar/avatar';
++import { PmIcon } from '../icon/icon';
++
++export type DialogMode = 'chat' | 'group' | 'contact' | 'invite';
++
++export type DialogResult =
++  | { mode: 'chat' | 'group' | 'invite'; conversation: Conversation }
++  | { mode: 'contact'; contact: Contact };
++
++const TITLES: Record<DialogMode, string> = {
++  chat: 'New message',
++  group: 'New group',
++  contact: 'Add a confidant',
++  invite: 'Invite to the group',
++};
++
++/** One dialog for every "find people, then act" flow: new chat, new group, add contact, invite. */
++@Component({
++  selector: 'pm-new-dialog',
++  imports: [PmAvatar, PmIcon],
++  template: `
++    <div class="overlay" (click)="closed.emit()">
++      <div class="box" role="dialog" aria-modal="true" [attr.aria-label]="title()" (click)="$event.stopPropagation()">
++        <header>
++          <h2 class="pm-title">{{ title() }}</h2>
++          <button type="button" class="x" aria-label="Close" (click)="closed.emit()">
++            <pm-icon name="close" [size]="12" />
++          </button>
++        </header>
++
++        @if (mode() === 'group') {
++          <label class="field">
++            <span class="pm-label">Group name</span>
++            <input
++              type="text"
++              maxlength="80"
++              placeholder="Name your hideout"
++              [value]="name()"
++              (input)="name.set($any($event.target).value)"
++            />
++          </label>
++        }
++
++        <label class="field">
++          <span class="pm-label">Find people</span>
++          <input
++            type="text"
++            placeholder="Name or username"
++            autocomplete="off"
++            [value]="query()"
++            (input)="onType($any($event.target).value)"
++          />
++        </label>
++
++        @if (picked().length) {
++          <ul class="chips">
++            @for (u of picked(); track u.id) {
++              <li>
++                {{ u.name }}
++                <button type="button" [attr.aria-label]="'Remove ' + u.name" (click)="toggle(u)">&times;</button>
++              </li>
++            }
++          </ul>
++        }
++
++        <ul class="results">
++          @for (u of results(); track u.id) {
++            <li>
++              <button type="button" (click)="pick(u)" [disabled]="busy()">
++                <pm-avatar [name]="u.name" [src]="u.avatar" [size]="24" />
++                <span>
++                  <strong>{{ u.name }}</strong>
++                  <small>&#64;{{ u.username }}</small>
++                </span>
++                @if (multi() && isPicked(u)) {
++                  <span class="tick">Added</span>
++                }
++              </button>
++            </li>
++          } @empty {
++            <li class="none">
++              {{ searching() ? 'Searching…' : query().trim() ? 'No one found.' : 'Type a name to start.' }}
++            </li>
++          }
++        </ul>
++
++        @if (error()) {
++          <p class="err">{{ error() }}</p>
++        }
++
++        @if (multi()) {
++          <footer>
++            <button type="button" class="pm-btn" [disabled]="!canConfirm() || busy()" (click)="confirm()">
++              <span>{{ busy() ? 'Working…' : mode() === 'group' ? 'Create group' : 'Invite' }}</span>
++            </button>
++          </footer>
++        }
++      </div>
++    </div>
++  `,
++  styleUrl: './new-dialog.scss',
++})
++export class NewDialog implements OnDestroy {
++  private api = inject(PhantomApi);
++  private conversations = inject(ConversationService);
++  private timer: ReturnType<typeof setTimeout> | null = null;
++
++  mode = input.required<DialogMode>();
++  /** Required for `invite`: the group people are added to. */
++  conversationId = input<number | null>(null);
++  /** People already in the group, hidden from the results for `invite`. */
++  exclude = input<number[]>([]);
++
++  done = output<DialogResult>();
++  closed = output<void>();
++
++  query = signal('');
++  name = signal('');
++  results = signal<User[]>([]);
++  picked = signal<User[]>([]);
++  searching = signal(false);
++  busy = signal(false);
++  error = signal<string | null>(null);
++
++  title = computed(() => TITLES[this.mode()]);
++  multi = computed(() => this.mode() === 'group' || this.mode() === 'invite');
++  canConfirm = computed(
++    () => this.picked().length > 0 && (this.mode() !== 'group' || this.name().trim().length > 0),
++  );
++
++  ngOnDestroy(): void {
++    if (this.timer) clearTimeout(this.timer);
++  }
++
++  onType(value: string): void {
++    this.query.set(value);
++    if (this.timer) clearTimeout(this.timer);
++
++    if (!value.trim()) {
++      this.results.set([]);
++      this.searching.set(false);
++      return;
++    }
++
++    this.searching.set(true);
++    this.timer = setTimeout(() => this.search(value.trim()), 250);
++  }
++
++  isPicked(u: User): boolean {
++    return this.picked().some((p) => p.id === u.id);
++  }
++
++  toggle(u: User): void {
++    this.picked.update((list) => (this.isPicked(u) ? list.filter((p) => p.id !== u.id) : [...list, u]));
++  }
++
++  pick(u: User): void {
++    this.error.set(null);
++
++    if (this.multi()) {
++      this.toggle(u);
++      return;
++    }
++
++    this.busy.set(true);
++
++    if (this.mode() === 'chat') {
++      this.conversations.startPrivate(u.id).subscribe({
++        next: (r) => this.finish({ mode: 'chat', conversation: r.conversation }),
++        error: () => this.fail('Could not start the conversation.'),
++      });
++    } else {
++      this.api.addContact(u.id).subscribe({
++        next: (contact) => this.finish({ mode: 'contact', contact }),
++        error: () => this.fail('Could not add this contact. They may already be in your list.'),
++      });
++    }
++  }
++
++  confirm(): void {
++    if (!this.canConfirm()) return;
++
++    this.error.set(null);
++    this.busy.set(true);
++    const ids = this.picked().map((u) => u.id);
++
++    if (this.mode() === 'group') {
++      this.conversations.createGroup({ name: this.name().trim(), participant_ids: ids }).subscribe({
++        next: (r) => this.finish({ mode: 'group', conversation: r.conversation }),
++        error: () => this.fail('Could not create the group.'),
++      });
++      return;
++    }
++
++    const id = this.conversationId();
++    if (!id) return this.fail('No group selected.');
++
++    this.api.invite(id, ids).subscribe({
++      next: (conversation) => this.finish({ mode: 'invite', conversation }),
++      error: () => this.fail('Could not invite these people.'),
++    });
++  }
++
++  private search(q: string): void {
++    this.api.searchUsers(q).subscribe({
++      next: (users) => {
++        // Drop an answer for a query the user has already changed.
++        if (q !== this.query().trim()) return;
++        const hidden = new Set(this.exclude());
++        this.results.set(users.filter((u) => !hidden.has(u.id)));
++        this.searching.set(false);
++      },
++      error: () => {
++        this.searching.set(false);
++        this.error.set('Search failed. Try again.');
++      },
++    });
++  }
++
++  private finish(result: DialogResult): void {
++    this.busy.set(false);
++    this.done.emit(result);
++  }
++
++  private fail(message: string): void {
++    this.busy.set(false);
++    this.error.set(message);
++  }
++}
+diff --git a/src/app/shared/page-frame/page-frame.scss b/src/app/shared/page-frame/page-frame.scss
+index 8cb6bd9..182fc5c 100644
+--- a/src/app/shared/page-frame/page-frame.scss
++++ b/src/app/shared/page-frame/page-frame.scss
+@@ -28,23 +28,18 @@
+ 
+ .me {
+   margin-top: auto;
++  color: inherit;
++  text-decoration: none;
++  cursor: pointer;
++  &:hover {
++    background: var(--pm-line-dark);
++  }
+   display: flex;
+   align-items: center;
+   gap: 8px;
+   padding: 12px 16px;
+   border-top: 1px solid var(--pm-line-dark);
+ 
+-  &__avatar {
+-    width: 22px;
+-    height: 22px;
+-    display: grid;
+-    place-items: center;
+-    background: var(--pm-ink);
+-    color: #fff;
+-    font: 800 10px/1 var(--pm-font-ui);
+-    border: 1px solid var(--pm-red);
+-  }
+-
+   &__text {
+     flex: 1;
+     display: flex;
+@@ -106,22 +101,85 @@
+   }
+ }
+ 
++
++.scrim,
++.aside__close {
++  display: none;
++}
++
++/* ---- tablet: list + main, aside becomes a drawer ---- */
+ @media (max-width: 1100px) {
+   :host {
+     grid-template-columns: 220px minmax(0, 1fr);
++    position: relative;
+   }
+ 
+   .aside {
+-    display: none;
++    position: absolute;
++    top: 0;
++    right: 0;
++    bottom: 0;
++    width: 282px;
++    max-width: 90%;
++    z-index: 20;
++    transform: translateX(100%);
++    transition: transform 0.2s ease;
++
++    &.open {
++      transform: none;
++    }
++  }
++
++  .scrim {
++    display: block;
++    position: absolute;
++    inset: 0;
++    z-index: 10;
++    border: 0;
++    background: rgba(0, 0, 0, 0.5);
++    cursor: pointer;
++  }
++
++  .aside__close {
++    display: flex;
++    align-items: center;
++    gap: 6px;
++    padding: 10px 16px;
++    background: #000;
++    border: 0;
++    border-bottom: 1px solid var(--pm-line);
++    color: #fff;
++    font: 800 8px/1 var(--pm-font-ui);
++    letter-spacing: 0.14em;
++    text-transform: uppercase;
++    cursor: pointer;
+   }
+ }
+ 
++/* ---- phone: one pane at a time ---- */
+ @media (max-width: 720px) {
+   :host {
+     grid-template-columns: minmax(0, 1fr);
+   }
+ 
+-  .list {
++  .list,
++  .main,
++  .aside {
+     display: none;
++    grid-area: 1 / 1;
++  }
++
++  .list.show,
++  .main.show,
++  .aside.show {
++    display: flex;
++  }
++
++  .aside {
++    position: static;
++    width: auto;
++    max-width: none;
++    transform: none;
++    border-left: 0;
+   }
+ }
+diff --git a/src/app/shared/page-frame/page-frame.ts b/src/app/shared/page-frame/page-frame.ts
+index 83bb2e2..55228e3 100644
+--- a/src/app/shared/page-frame/page-frame.ts
++++ b/src/app/shared/page-frame/page-frame.ts
+@@ -1,34 +1,50 @@
+-import { Component, computed, inject, input } from '@angular/core';
++import { Component, DestroyRef, computed, effect, inject, input, model, signal } from '@angular/core';
++import { RouterLink } from '@angular/router';
+ 
+ import { AuthService } from '../../core/services/auth';
++import { UiState } from '../../core/services/ui-state';
++import { PmAvatar } from '../avatar/avatar';
+ import { PmIcon } from '../icon/icon';
+ 
++export type FrameView = 'list' | 'main' | 'aside';
++
++const PHONE = '(max-width: 720px)';
++
+ /**
+- * Three-column frame shared by every page: list | main | aside.
++ * Frame shared by every page: list | main | aside.
+  * Pages project content with `slot="list"`, `slot="main"` and `slot="aside"`.
++ *
++ * Desktop shows all three columns. Tablet shows list + main and slides the aside in as a drawer.
++ * Phones show one pane at a time, driven by `view` (list -> main -> aside).
+  */
+ @Component({
+   selector: 'pm-page-frame',
+-  imports: [PmIcon],
++  imports: [PmIcon, PmAvatar, RouterLink],
+   template: `
+-    <section class="list" [class.list--dark]="listTone() === 'dark'">
++    <section class="list" [class.list--dark]="listTone() === 'dark'" [class.show]="view() === 'list'">
+       <ng-content select="[slot=list]" />
+ 
+-      <footer class="me">
+-        <span class="me__avatar">{{ initial() }}</span>
++      <a class="me" routerLink="/profile" aria-label="Edit your profile">
++        <pm-avatar [name]="displayName()" [src]="avatar()" [size]="24" />
+         <span class="me__text">
+           <strong>{{ displayName() }}</strong>
+-          <small>Online · Laying low</small>
++          <small>&#64;{{ username() }}</small>
+         </span>
+-        <pm-icon name="chevron-down" [size]="12" />
+-      </footer>
++        <pm-icon name="edit" [size]="12" />
++      </a>
+     </section>
+ 
+-    <section class="main">
++    <section class="main" [class.show]="view() === 'main'">
+       <ng-content select="[slot=main]" />
+     </section>
+ 
+-    <aside class="aside">
++    @if (drawer()) {
++      <button type="button" class="scrim" aria-label="Close panel" (click)="drawer.set(false)"></button>
++    }
++    <aside class="aside" [class.show]="view() === 'aside'" [class.open]="drawer()">
++      <button type="button" class="aside__close" aria-label="Close panel" (click)="closeInfo()">
++        <pm-icon name="close" [size]="12" /> Close
++      </button>
+       <div class="aside__body pm-scroll">
+         <ng-content select="[slot=aside]" />
+       </div>
+@@ -43,9 +59,47 @@ import { PmIcon } from '../icon/icon';
+ })
+ export class PageFrame {
+   private auth = inject(AuthService);
++  private ui = inject(UiState);
+ 
+   listTone = input<'paper' | 'dark'>('paper');
+ 
+-  displayName = computed(() => this.auth.currentUser()?.name ?? 'Ren Amamiya');
+-  initial = computed(() => this.displayName().charAt(0).toUpperCase());
++  /** Which pane a phone shows. Pages bind this with `[(view)]`. */
++  view = model<FrameView>('list');
++  /** Tablet drawer for the aside. */
++  drawer = signal(false);
++
++  displayName = computed(() => this.auth.currentUser()?.name ?? 'You');
++  username = computed(() => this.auth.currentUser()?.username ?? '');
++  avatar = computed(() => this.auth.currentUser()?.avatar ?? null);
++
++  constructor() {
++    effect(() => this.ui.hideTabs.set(this.view() !== 'list' && this.isPhone()));
++    inject(DestroyRef).onDestroy(() => this.ui.hideTabs.set(false));
++  }
++
++  isPhone(): boolean {
++    return typeof matchMedia === 'function' && matchMedia(PHONE).matches;
++  }
++
++  /** The "info" button in a pane header: full pane on phones, drawer on tablets. */
++  openInfo(): void {
++    if (this.isPhone()) this.view.set('aside');
++    else this.drawer.update((open) => !open);
++  }
++
++  /** Reveal the aside without toggling it (for taps on an item in the main pane). */
++  showInfo(): void {
++    if (this.isPhone()) this.view.set('aside');
++    else this.drawer.set(true);
++  }
++
++  closeInfo(): void {
++    if (this.isPhone()) this.view.set('main');
++    this.drawer.set(false);
++  }
++
++  /** Back from a detail pane to the list (phones only; harmless elsewhere). */
++  back(): void {
++    this.view.set('list');
++  }
+ }
+diff --git a/src/index.html b/src/index.html
+index 387665e..59d8f13 100644
+--- a/src/index.html
++++ b/src/index.html
+@@ -4,8 +4,13 @@
+   <meta charset="utf-8">
+   <title>PhanLink</title>
+   <base href="/">
+-  <meta name="viewport" content="width=device-width, initial-scale=1">
++  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
++  <meta name="theme-color" content="#0d0d0f">
+   <link rel="icon" type="image/x-icon" href="favicon.ico">
++  <link rel="manifest" href="manifest.webmanifest">
++  <link rel="apple-touch-icon" href="icon.svg">
++  <meta name="apple-mobile-web-app-capable" content="yes">
++  <meta name="mobile-web-app-capable" content="yes">
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;700;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+diff --git a/src/styles.scss b/src/styles.scss
+index aa3f7ca..9963f23 100644
+--- a/src/styles.scss
++++ b/src/styles.scss
+@@ -335,4 +335,58 @@ h3,
+   font-family: var(--font-display);
+   text-transform: uppercase;
+   letter-spacing: 0.5px;
+-}
+\ No newline at end of file
++}
++
++/* ---- responsive helpers ---- */
++:root {
++  /* Pages are drawn at desktop scale (7-11px type). Zoom scales the whole UI up on smaller screens. */
++  --z: 1;
++}
++
++@media (min-width: 721px) and (max-width: 1100px) {
++  :root {
++    --z: 1.25;
++  }
++}
++
++@media (max-width: 720px) {
++  :root {
++    --z: 1.6;
++  }
++}
++
++.pm-back,
++.pm-info {
++  display: none;
++  flex: none;
++  width: 22px;
++  height: 22px;
++  place-items: center;
++  padding: 0;
++  background: transparent;
++  border: 1px solid var(--pm-line);
++  color: inherit;
++  cursor: pointer;
++}
++
++@media (max-width: 1100px) {
++  .pm-info {
++    display: inline-grid;
++  }
++}
++
++@media (max-width: 720px) {
++  .pm-back {
++    display: inline-grid;
++  }
++}
++
++button,
++a {
++  -webkit-tap-highlight-color: transparent;
++}
++
++/* Message density preference (Settings > Appearance). */
++:root[data-density='compact'] {
++  --pm-gap-feed: 8px;
++}
+-- 
+2.43.0
+

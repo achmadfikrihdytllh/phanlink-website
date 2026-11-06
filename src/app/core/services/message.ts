@@ -29,6 +29,17 @@ export class MessageService {
     );
   }
 
+  sendFile(conversationId: number, file: File): Observable<{ data: Message }> {
+    const form = new FormData();
+    form.append('type', file.type.startsWith('image/') ? 'image' : 'file');
+    form.append('attachment', file);
+
+    return this.http.post<{ data: Message }>(
+      `${this.apiUrl}/conversations/${conversationId}/messages`,
+      form
+    );
+  }
+
   markAsRead(conversationId: number): Observable<{ message: string }> {
     return this.http.post<{ message: string }>(
       `${this.apiUrl}/conversations/${conversationId}/read`,

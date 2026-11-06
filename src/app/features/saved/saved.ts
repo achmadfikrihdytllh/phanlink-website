@@ -4,8 +4,9 @@ import { RouterLink } from '@angular/router';
 
 import { SavedCollection, SavedItem } from '../../core/models/phantom';
 import { PhantomApi } from '../../core/services/phantom-api';
+import { assetUrl } from '../../core/util/asset-url';
 import { PmIcon } from '../../shared/icon/icon';
-import { PageFrame } from '../../shared/page-frame/page-frame';
+import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
 
 type Tab = 'all' | 'messages' | 'files';
 
@@ -37,6 +38,7 @@ export class Saved implements OnInit {
   picked = signal<number | null>(null);
   newName = signal('');
   creating = signal(false);
+  view = signal<FrameView>('list');
 
   /** Items grouped under "Today", "Yesterday" or the calendar date. */
   days = computed(() => {
@@ -86,6 +88,7 @@ export class Saved implements OnInit {
 
   chooseCollection(id: number | null): void {
     this.collectionId.set(id);
+    this.view.set('main');
     this.reload();
   }
 
@@ -101,6 +104,10 @@ export class Saved implements OnInit {
 
   pick(s: SavedItem): void {
     this.picked.set(s.id);
+  }
+
+  url(path: string | null | undefined): string | null {
+    return assetUrl(path);
   }
 
   unsave(s: SavedItem): void {

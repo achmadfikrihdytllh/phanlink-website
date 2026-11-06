@@ -1,4 +1,4 @@
-<pm-page-frame>
+<pm-page-frame #frame [(view)]="view">
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Search</h1>
@@ -44,11 +44,16 @@
 
   <div slot="main" class="page">
     <header class="pm-hero">
-      <div>
+      <button type="button" class="pm-back" aria-label="Back to filters" (click)="frame.back()">
+        <pm-icon name="back" [size]="12" />
+      </button>
+      <div class="grow">
         <div class="pm-eyebrow">Global search / Messages &amp; shared intel</div>
         <h2 class="pm-title">Leave no clue behind.</h2>
       </div>
-      <pm-icon name="search" [size]="18" />
+      <button type="button" class="pm-info" aria-label="Filters" (click)="frame.back()">
+        <pm-icon name="more" [size]="13" />
+      </button>
     </header>
 
     <div class="bar">
@@ -81,7 +86,7 @@
             type="button"
             class="hit"
             [class.hit--on]="focus()?.message?.id === h.message.id"
-            (click)="pickedId.set(h.message.id)"
+            (click)="pickedId.set(h.message.id); frame.showInfo()"
           >
             <span class="hit__head">
               <span class="pm-avatar pm-avatar--light">{{ h.message.sender.name.charAt(0) }}</span>
@@ -138,7 +143,7 @@
           <small>{{ f.message.sender.name }}</small>
           <p>{{ f.message.body }}</p>
         </div>
-        <a class="pm-btn jump" routerLink="/messages"><span>Jump to message</span></a>
+        <a class="pm-btn jump" routerLink="/messages" [queryParams]="{ c: f.conversation.id }"><span>Jump to message</span></a>
         <button type="button" class="pm-btn pm-btn--dark jump" (click)="saveFocused()">
           <span>
             {{ saveState() === 'saved' ? 'Saved' : saveState() === 'error' ? 'Could not save' : 'Save message' }}

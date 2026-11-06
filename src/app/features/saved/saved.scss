@@ -205,3 +205,8 @@
 .newcol {
   margin-top: 10px;
 }
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}

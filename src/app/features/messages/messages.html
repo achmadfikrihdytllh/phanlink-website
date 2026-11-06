@@ -1,9 +1,9 @@
-<pm-page-frame>
+<pm-page-frame #frame [(view)]="view">
   <!-- LIST -->
   <div slot="list" class="list">
     <header class="list__head">
       <h1 class="pm-title list__title">Messages</h1>
-      <button class="icon-btn" type="button" aria-label="New message">
+      <button class="icon-btn" type="button" aria-label="New message" (click)="composing.set(true)">
         <pm-icon name="compose" [size]="12" />
       </button>
     </header>
@@ -31,15 +31,18 @@
             type="button"
             class="convo"
             [class.convo--active]="selected()?.id === c.id"
-            (click)="open(c)"
+            (click)="choose(c)"
           >
-            <span class="avatar">{{ initial(c.name) }}</span>
+            <pm-avatar [name]="c.name" [src]="c.avatar" />
             <span class="convo__text">
               <strong>{{ c.name ?? 'Conversation' }}</strong>
               <small>{{ previewOf(c) }}</small>
             </span>
             @if (c.latest_message; as last) {
               <time class="convo__time">{{ last.created_at | date: 'HH:mm' }}</time>
+            }
+            @if (c.unread_count) {
+              <span class="convo__badge">{{ c.unread_count }}</span>
             }
           </button>
         </li>
@@ -53,14 +56,21 @@
   <div slot="main" class="chat">
     @if (selected(); as convo) {
       <header class="chat__head">
-        <span class="avatar avatar--lg">{{ initial(convo.name) }}</span>
+        <button type="button" class="pm-back" aria-label="Back to conversations" (click)="frame.back()">
+          <pm-icon name="back" [size]="12" />
+        </button>
+        <pm-avatar [name]="convo.name" [src]="convo.avatar" [size]="30" />
         <div class="chat__who">
           <h2 class="pm-title">{{ convo.name }}</h2>
           <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
         </div>
         <div class="chat__tools">
-          <pm-icon name="phone" [size]="13" />
-          <pm-icon name="search" [size]="13" />
+          <a routerLink="/search" [queryParams]="{ c: convo.id }" aria-label="Search this conversation">
+            <pm-icon name="search" [size]="13" />
+          </a>
+          <button type="button" class="pm-info" aria-label="Conversation info" (click)="frame.openInfo()">
+            <pm-icon name="more" [size]="13" />
+          </button>
         </div>
       </header>
 
@@ -77,9 +87,24 @@
             </span>
             <div class="row__line">
               @if (!isMine(m)) {
-                <span class="avatar">{{ initial(m.sender.name) }}</span>
+                <pm-avatar [name]="m.sender.name" [src]="m.sender.avatar" />
               }
-              <p class="bubble">{{ m.body }}</p>
+              <div class="bubble">
+                @for (a of m.attachments; track a.id) {
+                  @if (m.type === 'image') {
+                    <a [href]="url(a.file_path)" target="_blank" rel="noopener">
+                      <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" />
+                    </a>
+                  } @else {
+                    <a class="bubble__file" [href]="url(a.file_path)" target="_blank" rel="noopener" download>
+                      <pm-icon name="file" [size]="12" /> {{ fileName(a.file_path) }}
+                    </a>
+                  }
+                }
+                @if (m.body) {
+                  <p>{{ m.body }}</p>
+                }
+              </div>
             </div>
           </div>
         } @empty {
@@ -92,6 +117,10 @@
       <footer class="composer">
         <span class="pm-eyebrow composer__label">Your next move.</span>
         <div class="composer__box">
+          <label class="composer__attach" aria-label="Attach a file" [class.busy]="sending()">
+            <pm-icon name="link" [size]="13" />
+            <input type="file" hidden #file (change)="attach(file)" />
+          </label>
           <input
             type="text"
             [placeholder]="'Message ' + convo.name"
@@ -103,7 +132,7 @@
             <span>Send</span>
           </button>
         </div>
-        <small class="composer__hint">Enter to send</small>
+        <small class="composer__hint">{{ sendError() ?? (sending() ? 'Sending file…' : 'Enter to send') }}</small>
       </footer>
     } @else {
       <div class="chat__empty">
@@ -126,7 +155,7 @@
         <ul class="members">
           @for (p of convo.participants; track p.id) {
             <li>
-              <span class="avatar">{{ initial(p.name) }}</span>
+              <pm-avatar [name]="p.name" [src]="p.avatar" />
               <span class="members__text">
                 <strong>{{ p.name }}</strong>
                 <small>{{ p.role === 'admin' ? 'Leader' : p.status }}</small>
@@ -146,7 +175,9 @@
               <strong>{{ fileName(f.file_path) }}</strong>
               <small>{{ size(f.file_size) }}</small>
             </span>
-            <pm-icon name="download" [size]="11" />
+            <a [href]="url(f.file_path)" target="_blank" rel="noopener" download aria-label="Download file">
+              <pm-icon name="download" [size]="11" />
+            </a>
           </div>
         } @empty {
           <p class="intel__empty">Nothing shared yet.</p>
@@ -155,3 +186,7 @@
     }
   </div>
 </pm-page-frame>
+
+@if (composing()) {
+  <pm-new-dialog mode="chat" (done)="onCreated($event)" (closed)="composing.set(false)" />
+}

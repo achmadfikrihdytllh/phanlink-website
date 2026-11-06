@@ -1,8 +1,8 @@
-<pm-page-frame listTone="dark">
+<pm-page-frame #frame listTone="dark" [(view)]="view">
   <div slot="list">
     <header class="pm-list-head">
       <h1 class="pm-title">Contacts</h1>
-      <button class="pm-icon-btn add" type="button" aria-label="Invite a confidant">
+      <button class="pm-icon-btn add" type="button" aria-label="Add a confidant" (click)="adding.set(true)">
         <pm-icon name="plus" [size]="12" />
       </button>
     </header>
@@ -32,7 +32,7 @@
             [class.active]="c.id === selectedId()"
             (click)="select(c)"
           >
-            <span class="pm-avatar pm-avatar--light">{{ c.name.charAt(0) }}</span>
+            <pm-avatar class="av" [name]="c.name" [src]="c.avatar" />
             <span class="pm-list-item__text">
               <strong>{{ c.name }}</strong>
               <small>{{ statusText(c) }}</small>
@@ -56,18 +56,23 @@
   <div slot="main" class="page">
     @if (selected(); as c) {
       <header class="pm-hero">
-        <div>
+        <button type="button" class="pm-back" aria-label="Back to contacts" (click)="frame.back()">
+          <pm-icon name="back" [size]="12" />
+        </button>
+        <div class="hero__text">
           <div class="pm-eyebrow">Your confidants / Contact details</div>
           <h2 class="pm-title">{{ c.name }}</h2>
         </div>
         <div class="actions">
-          <button type="button" class="pm-btn pm-btn--dark"><span>Call</span></button>
-          <a class="pm-btn" routerLink="/messages"><span>Message</span></a>
+          <button type="button" class="pm-btn" [disabled]="opening()" (click)="message()"><span>Message</span></button>
+          <button type="button" class="pm-info" aria-label="Contact dossier" (click)="frame.openInfo()">
+            <pm-icon name="more" [size]="13" />
+          </button>
         </div>
       </header>
 
       <div class="profile">
-        <span class="pm-avatar pm-avatar--lg">{{ c.name.charAt(0) }}</span>
+        <pm-avatar [name]="c.name" [src]="c.avatar" [size]="64" />
         <div>
           <div class="pm-eyebrow code">Codename / {{ c.codename }}</div>
           <h2 class="pm-title">{{ c.name }}</h2>
@@ -83,6 +88,17 @@
       </nav>
 
       <div class="pane pm-scroll">
+        @if (tab() === 'Media') {
+          @for (f of detail()?.shared_files ?? []; track f.id) {
+            <a class="media" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
+              <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
+              <span><strong>{{ f.name }}</strong><small>{{ f.sender.name }} · {{ size(f.file_size) }}</small></span>
+              <pm-icon name="download" [size]="11" />
+            </a>
+          } @empty {
+            <p class="empty">Nothing shared with {{ c.name }} yet.</p>
+          }
+        } @else {
         <div class="paper">
           <div class="pm-eyebrow">About</div>
           <blockquote class="pm-title">“{{ c.bio || 'No bio yet.' }}”</blockquote>
@@ -125,6 +141,7 @@
             (keydown.enter)="saveNote()"
           />
         </label>
+        }
       </div>
     } @else if (!loading()) {
       <div class="pane"><p>Pick a confidant to see their details.</p></div>
@@ -142,7 +159,7 @@
         <div class="pm-eyebrow">Groups in common / {{ detail()?.groups_in_common?.length ?? 0 }}</div>
         @for (g of detail()?.groups_in_common ?? []; track g.id) {
           <a class="group" routerLink="/groups">
-            <span class="pm-avatar pm-avatar--light">{{ (g.name ?? '?').charAt(0) }}</span>
+            <pm-avatar class="av" [name]="g.name" [src]="g.avatar" />
             <span><strong>{{ g.name }}</strong><small>{{ g.participants.length }} members</small></span>
           </a>
         }
@@ -150,13 +167,13 @@
       <section class="pm-section">
         <div class="pm-eyebrow">Shared files / {{ detail()?.shared_files?.length ?? 0 }}</div>
         @for (f of detail()?.shared_files ?? []; track f.id) {
-          <div class="group">
+          <a class="group" [href]="url(f.file_path)" target="_blank" rel="noopener" download>
             <pm-icon [name]="f.file_type === 'image' ? 'image' : 'file'" [size]="12" />
             <span>
               <strong>{{ f.name }}</strong>
               <small>{{ f.sender.name }} · {{ size(f.file_size) }}</small>
             </span>
-          </div>
+          </a>
         }
       </section>
       <section class="pm-section">
@@ -173,7 +190,12 @@
         <button type="button" class="block" (click)="toggleBlock()">
           {{ c.is_blocked ? 'Unblock contact' : 'Block contact' }}
         </button>
+        <button type="button" class="block" (click)="remove()">Remove contact</button>
       </section>
     }
   </div>
 </pm-page-frame>
+
+@if (adding()) {
+  <pm-new-dialog mode="contact" (done)="onAdded($event)" (closed)="adding.set(false)" />
+}

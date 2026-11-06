@@ -1,13 +1,13 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 
 import { Conversation } from '../../core/models/conversation';
 import { SearchResponse } from '../../core/models/phantom';
 import { ConversationService } from '../../core/services/conversation';
 import { PhantomApi } from '../../core/services/phantom-api';
 import { PmIcon } from '../../shared/icon/icon';
-import { PageFrame } from '../../shared/page-frame/page-frame';
+import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
 
 interface Segment {
   text: string;
@@ -27,6 +27,7 @@ const RECENT_KEY = 'phanlink.recentSearches';
 export class Search implements OnInit, OnDestroy {
   private api = inject(PhantomApi);
   private conversationService = inject(ConversationService);
+  private route = inject(ActivatedRoute);
 
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -41,6 +42,7 @@ export class Search implements OnInit, OnDestroy {
   showFiles = signal(true);
   recent = signal<string[]>(this.loadRecent());
   pickedId = signal<number | null>(null);
+  view = signal<FrameView>('main');
 
   messages = computed(() => this.result()?.messages ?? []);
   files = computed(() => this.result()?.files ?? []);
@@ -51,6 +53,10 @@ export class Search implements OnInit, OnDestroy {
   );
 
   ngOnInit(): void {
+    // `/search?c=ID` pre-filters to one conversation (the search icon in a chat header).
+    const c = Number(this.route.snapshot.queryParamMap.get('c'));
+    if (c) this.conversationId.set(c);
+
     this.conversationService.list().subscribe({
       next: (r) => this.conversations.set(r.conversations),
     });
@@ -112,6 +118,7 @@ export class Search implements OnInit, OnDestroy {
   }
 
   useRecent(term: string): void {
+    this.view.set('main');
     this.query.set(term);
     this.run();
   }

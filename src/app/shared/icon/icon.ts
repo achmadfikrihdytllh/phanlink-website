@@ -17,6 +17,7 @@ export type PmIconName =
   | 'file'
   | 'download'
   | 'arrow'
+  | 'back'
   | 'star'
   | 'pin'
   | 'link'
@@ -54,6 +55,7 @@ const PATHS: Record<PmIconName, string> = {
   file: 'M7 3h7l4 4v14H7V3Zm7 0v4h4',
   download: 'M12 4v11m-4-4 4 4 4-4M5 20h14',
   arrow: 'M7 17 17 7M9 7h8v8',
+  back: 'M19 12H5m6-6-6 6 6 6',
   star: 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3Z',
   pin: 'M9 4h6l-1 6 3 3H7l3-3-1-6Zm3 9v7',
   link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 18.7l1-1',

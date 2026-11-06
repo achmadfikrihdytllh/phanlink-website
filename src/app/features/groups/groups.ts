@@ -5,12 +5,14 @@ import { RouterLink } from '@angular/router';
 import { Conversation } from '../../core/models/conversation';
 import { SharedAttachment } from '../../core/models/phantom';
 import { PhantomApi } from '../../core/services/phantom-api';
+import { assetUrl } from '../../core/util/asset-url';
 import { PmIcon } from '../../shared/icon/icon';
-import { PageFrame } from '../../shared/page-frame/page-frame';
+import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
+import { FrameView, PageFrame } from '../../shared/page-frame/page-frame';
 
 @Component({
   selector: 'app-groups',
-  imports: [DatePipe, RouterLink, PmIcon, PageFrame],
+  imports: [DatePipe, RouterLink, PmIcon, PageFrame, NewDialog],
   templateUrl: './groups.html',
   styleUrl: './groups.scss',
 })
@@ -23,6 +25,8 @@ export class Groups implements OnInit {
   query = signal('');
   loading = signal(true);
   failed = signal(false);
+  view = signal<FrameView>('list');
+  dialog = signal<'group' | 'invite' | null>(null);
 
   selected = computed<Conversation | null>(
     () => this.groups().find((g) => g.id === this.selectedId()) ?? null,
@@ -42,7 +46,8 @@ export class Groups implements OnInit {
       next: (list) => {
         this.groups.set(list);
         this.loading.set(false);
-        if (list.length) this.select(list[0]);
+        // On a phone the list is the landing pane; only wider screens preselect a group.
+        if (list.length && !this.isPhone()) this.select(list[0], false);
       },
       error: () => {
         this.failed.set(true);
@@ -51,7 +56,13 @@ export class Groups implements OnInit {
     });
   }
 
-  select(g: Conversation): void {
+  /** A tap on a group in the list. */
+  choose(g: Conversation): void {
+    this.select(g, true);
+  }
+
+  select(g: Conversation, show: boolean): void {
+    if (show) this.view.set('main');
     this.selectedId.set(g.id);
     this.files.set([]);
 
@@ -69,6 +80,25 @@ export class Groups implements OnInit {
   togglePin(): void {
     const g = this.selected();
     if (g) this.patch(g, { is_pinned: !g.is_pinned });
+  }
+
+  memberIds = computed(() => this.selected()?.participants.map((p) => p.id) ?? []);
+
+  onDialogDone(result: DialogResult): void {
+    this.dialog.set(null);
+    if (result.mode === 'contact') return;
+
+    const g = result.conversation;
+    this.groups.update((list) => (list.some((x) => x.id === g.id) ? list.map((x) => (x.id === g.id ? g : x)) : [g, ...list]));
+    this.select(g, true);
+  }
+
+  isPhone(): boolean {
+    return typeof matchMedia === 'function' && matchMedia('(max-width: 720px)').matches;
+  }
+
+  url(path: string | null | undefined): string | null {
+    return assetUrl(path);
   }
 
   initial(name: string | null | undefined): string {

@@ -47,6 +47,12 @@ export class AuthService {
     );
   }
 
+  /** Keep the signed-in user in sync after the profile changes. */
+  updateUser(user: User): void {
+    localStorage.setItem('user', JSON.stringify(user));
+    this.currentUser.set(user);
+  }
+
   getToken(): string | null {
     return localStorage.getItem('token');
   }

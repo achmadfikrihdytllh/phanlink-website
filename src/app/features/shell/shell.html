@@ -35,11 +35,22 @@
       >
         <pm-icon name="settings" [size]="15" />
       </a>
-      <span class="rail__me" [title]="'Signed in'">{{ initial() }}</span>
+      <a class="rail__me" routerLink="/profile" routerLinkActive="active" title="Edit your profile" aria-label="Edit your profile">
+        <pm-avatar [name]="name()" [src]="user()?.avatar" [size]="26" />
+      </a>
     </nav>
 
     <main class="content">
       <router-outlet />
     </main>
   </div>
+
+  <nav class="tabs" [class.tabs--hidden]="ui.hideTabs()" aria-label="Primary">
+    @for (t of tabs; track t.path) {
+      <a class="tabs__item" [routerLink]="t.path" routerLinkActive="active">
+        <pm-icon [name]="t.icon" [size]="16" />
+        <span>{{ t.label }}</span>
+      </a>
+    }
+  </nav>
 </div>

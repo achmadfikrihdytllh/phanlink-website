@@ -4,6 +4,7 @@ import { Observable, map } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { Conversation } from '../models/conversation';
+import { User } from '../models/user';
 import {
   Contact,
   ContactDetail,
@@ -24,6 +25,17 @@ import {
 export class PhantomApi {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  // ---- profile & users ----
+  updateProfile(data: FormData): Observable<User> {
+    return this.http.post<{ user: User }>(`${this.api}/profile`, data).pipe(map((r) => r.user));
+  }
+
+  searchUsers(query: string): Observable<User[]> {
+    return this.http
+      .get<{ users: User[] }>(`${this.api}/users/search`, { params: { query } })
+      .pipe(map((r) => r.users));
+  }
 
   // ---- groups ----
   groups(): Observable<Conversation[]> {
@@ -66,6 +78,10 @@ export class PhantomApi {
     return this.http
       .post<{ contact: Contact }>(`${this.api}/contacts`, { user_id: userId, nickname: nickname ?? null })
       .pipe(map((r) => r.contact));
+  }
+
+  removeContact(userId: number): Observable<void> {
+    return this.http.delete<void>(`${this.api}/contacts/${userId}`);
   }
 
   updateContact(

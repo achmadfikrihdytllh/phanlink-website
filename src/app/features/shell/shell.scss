@@ -1,12 +1,16 @@
 :host {
   display: block;
   height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--pm-ink);
   color: #fff;
 }
 
 .window {
-  height: 100%;
+  /* zoom scales every pane on tablets and phones; divide the height back so it still fits. */
+  zoom: var(--z);
+  height: calc(100dvh / var(--z));
   display: flex;
   flex-direction: column;
 }
@@ -108,13 +112,18 @@
   }
 
   &__me {
-    width: 22px;
-    height: 22px;
     display: grid;
     place-items: center;
-    border: 1px solid var(--pm-red);
-    background: var(--pm-ink);
-    font: 800 10px/1 var(--pm-font-ui);
+    border: 1px solid transparent;
+    color: #fff;
+
+    &.active {
+      border-color: var(--pm-red);
+    }
+
+    pm-avatar {
+      border-color: var(--pm-red);
+    }
   }
 }
 
@@ -124,12 +133,49 @@
   height: 100%;
 }
 
+.tabs {
+  display: none;
+}
+
 @media (max-width: 720px) {
-  .body {
-    grid-template-columns: 44px minmax(0, 1fr);
+  .titlebar,
+  .rail {
+    display: none;
   }
 
-  .titlebar__controls {
-    display: none;
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tabs {
+    flex: none;
+    display: flex;
+    background: #000;
+    border-top: 1px solid var(--pm-line);
+    padding-bottom: calc(env(safe-area-inset-bottom) / var(--z));
+
+    &--hidden {
+      display: none;
+    }
+
+    &__item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 7px 0 6px;
+      color: var(--pm-muted);
+      font: 700 6px/1 var(--pm-font-ui);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border-top: 2px solid transparent;
+
+      &.active {
+        color: #fff;
+        border-top-color: var(--pm-red);
+      }
+    }
   }
 }

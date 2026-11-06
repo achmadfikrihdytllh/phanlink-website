@@ -1,0 +1,64 @@
+<div class="page pm-scroll">
+  <header class="pm-hero">
+    <div>
+      <div class="pm-eyebrow">Your secret identity</div>
+      <h1 class="pm-title">Edit profile</h1>
+    </div>
+    <button class="pm-btn" type="button" [disabled]="saving() || !dirty()" (click)="save()">
+      <span>{{ saving() ? 'Saving…' : saved() && !dirty() ? 'Saved' : 'Save changes' }}</span>
+    </button>
+  </header>
+
+  <div class="body">
+    <section class="photo">
+      <pm-avatar [name]="name()" [src]="shownAvatar()" [size]="88" />
+      <div class="photo__actions">
+        <label class="pm-btn pm-btn--dark">
+          <span>Change photo</span>
+          <input type="file" accept="image/*" hidden #pick (change)="chooseFile(pick)" />
+        </label>
+        <small>JPG or PNG, up to 5 MB.</small>
+      </div>
+    </section>
+
+    <section class="form">
+      <label>
+        <span class="pm-label">Display name</span>
+        <input class="field" maxlength="255" [ngModel]="name()" (ngModelChange)="name.set($event); edited()" />
+        @if (fieldErrors()['name']) { <em>{{ fieldErrors()['name'] }}</em> }
+      </label>
+
+      <label>
+        <span class="pm-label">Username</span>
+        <input class="field" maxlength="50" [ngModel]="username()" (ngModelChange)="username.set($event); edited()" />
+        @if (fieldErrors()['username']) { <em>{{ fieldErrors()['username'] }}</em> }
+      </label>
+
+      <label>
+        <span class="pm-label">Bio</span>
+        <textarea class="field" rows="3" maxlength="500" [ngModel]="bio()" (ngModelChange)="bio.set($event); edited()"></textarea>
+        @if (fieldErrors()['bio']) { <em>{{ fieldErrors()['bio'] }}</em> }
+      </label>
+
+      <label>
+        <span class="pm-label">Phone number</span>
+        <input class="field" maxlength="20" inputmode="tel" [ngModel]="phone()" (ngModelChange)="phone.set($event); edited()" />
+        @if (fieldErrors()['phone_number']) { <em>{{ fieldErrors()['phone_number'] }}</em> }
+      </label>
+
+      <label>
+        <span class="pm-label">Email</span>
+        <input class="field" [value]="user()?.email ?? ''" readonly />
+      </label>
+
+      @if (error()) {
+        <p class="err">{{ error() }}</p>
+      }
+    </section>
+
+    <nav class="links">
+      <a routerLink="/settings"><pm-icon name="settings" [size]="12" /> Preferences</a>
+      <button type="button" (click)="signOut()"><pm-icon name="logout" [size]="12" /> Sign out</button>
+    </nav>
+  </div>
+</div>
