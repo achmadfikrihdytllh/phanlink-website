@@ -145,27 +145,50 @@ export class Messages implements OnInit, OnDestroy {
     this.loadConversations(true);
 
     // No websocket server (free deploy): fall back to a light poll so new messages still show up.
-    if (!environment.reverbHost) this.pollTimer = setInterval(() => this.poll(), 5000);
+    if (!environment.reverbHost) this.pollTimer = setInterval(() => this.poll(), 8000);
   }
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** True while a poll round is still running, so slow responses never pile up or arrive out of order. */
+  private polling = false;
+
   private poll(): void {
-    if (document.hidden) return;
-    this.loadConversations(false);
+    if (document.hidden || this.polling) return;
+    this.polling = true;
 
     const id = this.activeConversationId;
-    if (!id) return;
-    this.messageService.getMessages(id).subscribe({
-      next: (res) => {
-        if (this.activeConversationId !== id) return;
-        const known = new Set(this.messages().map((m) => m.id));
-        for (const m of [...res.messages].reverse()) {
-          if (known.has(m.id)) this.replaceMessage(m);
-          else this.append(m);
-        }
-      },
-    });
+    const done = () => (this.polling = false);
+
+    this.conversationService
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.conversations.set(
+            res.conversations.map((c) => (c.id === this.activeConversationId ? { ...c, unread_count: 0 } : c)),
+          );
+        },
+        error: done,
+        complete: () => {
+          if (!id) return done();
+          this.messageService
+            .getMessages(id)
+            .pipe(takeUntilDestroyed(this.destroyRef))
+            .subscribe({
+              next: (res) => {
+                if (this.activeConversationId !== id) return;
+                const known = new Set(this.messages().map((m) => m.id));
+                for (const m of [...res.messages].reverse()) {
+                  if (known.has(m.id)) this.replaceMessage(m);
+                  else this.append(m);
+                }
+              },
+              error: done,
+              complete: done,
+            });
+        },
+      });
   }
 
   ngOnDestroy(): void {
