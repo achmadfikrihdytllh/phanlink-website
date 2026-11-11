@@ -1,8 +1,8 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.phanlink.com/api',
+  apiUrl: 'https://phanlink.onrender.com/api',
   reverbAppKey: 'a1int0v4sq8h21egbyfk',
-  reverbHost: 'your-production-host.com',
+  reverbHost: '',
   reverbPort: 443,
   reverbScheme: 'https',
 };
