@@ -1,59 +1,86 @@
-# PhanlinkWeb
+# Phanlink Web (frontend)
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.0.8.
+Antarmuka web **Phantom Messenger**, dibangun dengan Angular 22. Backend-nya ada di repo [`phanlink`](https://github.com/achmadfikrihdytllh/phanlink) (Laravel).
 
-## Development server
+## Fitur
 
-To start a local development server, run:
+Enam halaman dalam satu shell:
 
-```bash
-ng serve
-```
+- **Messages:** daftar percakapan, chat realtime, pesan baru, lampiran.
+- **Groups:** daftar grup, buat grup, undang anggota, file bersama, bisukan dan sematkan.
+- **Saved:** pesan tersimpan, koleksi, unduh file, lompat ke chat.
+- **Contacts:** daftar kontak, tambah kontak, nickname dan catatan, profil kontak.
+- **Search:** pencarian pesan dan file dengan filter percakapan.
+- **Settings:** tema (Phantom, Midnight, Paper), kepadatan pesan, notifikasi, privasi, hapus data lokal.
+- **Profil:** ganti foto, nama, username, bio, dan nomor HP (buka dari avatar di rail atau footer daftar).
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+**Responsif:** desktop tiga kolom, tablet dua panel dengan laci info, HP satu panel dengan bar tab di bawah dan tombol kembali. Mendukung PWA (manifest ada di `public/`).
 
-## Code scaffolding
+## Kebutuhan
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+- Node.js **22.22.3 atau lebih baru** (atau 24.15.0 atau lebih baru). Cek dengan `node -v`.
+- Backend `phanlink` sudah berjalan (lihat README-nya).
 
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
+## Menjalankan di lokal
 
 ```bash
-ng build
+npm install
+npm start          # ng serve -> http://localhost:4200
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+Di PowerShell yang memblokir skrip, pakai `npm.cmd install` dan `npm.cmd start`.
 
-## Running unit tests
+### Alamat backend
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+`npm start` memakai `src/environments/environment.development.ts`:
+
+```ts
+export const environment = {
+  production: false,
+  apiUrl: 'http://127.0.0.1:8000/api',   // ubah bila backend memakai port lain, mis. 8001
+  reverbAppKey: 'a1int0v4sq8h21egbyfk',  // sama dengan REVERB_APP_KEY di backend
+  reverbHost: 'localhost',
+  reverbPort: 8080,
+  reverbScheme: 'http',
+};
+```
+
+`src/environments/environment.ts` dipakai untuk build produksi. Isi `apiUrl` dan `reverbHost` dengan alamat backend yang sudah online.
+
+### Login demo
+
+Setelah backend di-seed: `joker` / `password` (akun lain: `skull`, `panther`, `queen`, `oracle`, `fox`, `mona`, semuanya `password`).
+
+## Build
 
 ```bash
-ng test
+npm run build      # hasil di dist/
 ```
 
-## Running end-to-end tests
+Hasil build berupa situs statis, jadi bisa di-host di Firebase Hosting, Netlify, Cloudflare Pages, atau disajikan langsung oleh Laravel dari folder `public/`. Atur fallback ke `index.html` untuk semua rute (single-page app).
 
-For end-to-end (e2e) testing, run:
+## Menguji tampilan HP
+
+Di Chrome: F12, lalu Ctrl+Shift+M, dan pilih ukuran HP.
+
+## Struktur
+
+```
+src/app/
+  core/       model, service API, auth, guard, interceptor
+  features/   shell, messages, groups, saved, contacts, search, settings, profile, auth
+  shared/     page-frame (tata letak 3 panel), icon, avatar, new-dialog
+src/environments/   alamat backend dev dan produksi
+public/             manifest PWA dan ikon
+```
+
+## Menjadikan aplikasi Android
+
+Setelah frontend dan backend online (HTTPS), bisa dibungkus dengan Capacitor atau PWABuilder tanpa biaya. Untuk PWABuilder, ikon manifest perlu PNG 192 dan 512.
+
+## Perintah lain
 
 ```bash
-ng e2e
+ng test       # unit test (Vitest)
+ng generate component nama-komponen
 ```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
