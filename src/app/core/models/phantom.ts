@@ -92,3 +92,35 @@ export interface UserPrefs {
   readReceipts: boolean;
   showOnline: boolean;
 }
+
+export type RsvpStatus = 'going' | 'maybe' | 'declined';
+
+export interface GroupEvent {
+  id: number;
+  conversation_id: number;
+  title: string;
+  description: string | null;
+  location: string | null;
+  starts_at: string;
+  created_by: { id: number; name: string };
+  counts: Record<RsvpStatus, number>;
+  my_response: RsvpStatus | null;
+}
+
+export interface GroupEventInput {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  starts_at: string;
+}
+
+export interface Poll {
+  id: number;
+  conversation_id: number;
+  question: string;
+  created_by: number;
+  total_votes: number;
+  my_vote: number | null;
+  options: { id: number; label: string; votes: number }[];
+  created_at: string;
+}

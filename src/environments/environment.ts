@@ -1,3 +1,4 @@
+// Production build. Replace the placeholders with your deployed backend before `ng build`.
 export const environment = {
   production: true,
   apiUrl: 'https://phanlink.onrender.com/api',

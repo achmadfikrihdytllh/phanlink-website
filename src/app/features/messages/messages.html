@@ -36,7 +36,11 @@
             <pm-avatar [name]="c.name" [src]="c.avatar" />
             <span class="convo__text">
               <strong>{{ c.name ?? 'Conversation' }}</strong>
-              <small>{{ previewOf(c) }}</small>
+              @if (typingText(c.id); as t) {
+                <small class="typing">{{ t }}</small>
+              } @else {
+                <small>{{ previewOf(c) }}</small>
+              }
             </span>
             @if (c.latest_message; as last) {
               <time class="convo__time">{{ last.created_at | date: 'HH:mm' }}</time>
@@ -62,7 +66,11 @@
         <pm-avatar [name]="convo.name" [src]="convo.avatar" [size]="30" />
         <div class="chat__who">
           <h2 class="pm-title">{{ convo.name }}</h2>
-          <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
+          @if (typingText(convo.id); as t) {
+            <small class="typing">{{ t }}</small>
+          } @else {
+            <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
+          }
         </div>
         <div class="chat__tools">
           <a routerLink="/search" [queryParams]="{ c: convo.id }" aria-label="Search this conversation">
@@ -74,39 +82,113 @@
         </div>
       </header>
 
-      <div class="feed pm-scroll" #feed>
+      @if (convo.pinned_message; as pin) {
+        <div class="pinbar">
+          <pm-icon name="saved" [size]="11" />
+          <span class="pinbar__text"><b>Pinned</b> {{ pin.body ?? 'Message' }}</span>
+          @if (canPin()) {
+            <button type="button" aria-label="Unpin message" (click)="togglePin(null)">
+              <pm-icon name="close" [size]="10" />
+            </button>
+          }
+        </div>
+      }
+
+      <div class="feed pm-scroll" #feed (scroll)="onScroll()">
         @if (loading()) {
           <p class="feed__note">Loading…</p>
         }
 
+        @if (hasMore()) {
+          <button type="button" class="more" (click)="loadOlder()" [disabled]="loadingMore()">
+            {{ loadingMore() ? 'Loading…' : 'Load earlier messages' }}
+          </button>
+        }
+
         @for (m of messages(); track m.id) {
-          <div class="row" [class.row--mine]="isMine(m)">
-            <span class="row__meta">
-              {{ isMine(m) ? 'You' : m.sender.name }}
-              <time>{{ m.created_at | date: 'HH:mm' }}</time>
-            </span>
-            <div class="row__line">
-              @if (!isMine(m)) {
-                <pm-avatar [name]="m.sender.name" [src]="m.sender.avatar" />
-              }
-              <div class="bubble">
-                @for (a of m.attachments; track a.id) {
-                  @if (m.type === 'image') {
-                    <a [href]="url(a.file_path)" target="_blank" rel="noopener">
-                      <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" />
-                    </a>
+          @if (m.type === 'system') {
+            <p class="sys">{{ m.body }}</p>
+          } @else {
+            <div class="row" [class.row--mine]="isMine(m)">
+              <span class="row__meta">
+                {{ isMine(m) ? 'You' : m.sender.name }}
+                <time>{{ m.created_at | date: 'HH:mm' }}</time>
+                @if (m.edited_at && !m.deleted) { <em>edited</em> }
+              </span>
+              <div class="row__line">
+                @if (!isMine(m)) {
+                  <pm-avatar [name]="m.sender.name" [src]="m.sender.avatar" />
+                }
+                <div
+                  class="bubble"
+                  [class.bubble--gone]="m.deleted"
+                  [class.bubble--open]="menuFor() === m.id"
+                  tabindex="0"
+                  (click)="toggleMenu(m)"
+                  (keydown.enter)="toggleMenu(m)"
+                >
+                  @if (m.deleted) {
+                    <p>This message was deleted.</p>
                   } @else {
-                    <a class="bubble__file" [href]="url(a.file_path)" target="_blank" rel="noopener" download>
-                      <pm-icon name="file" [size]="12" /> {{ fileName(a.file_path) }}
-                    </a>
+                    @if (m.reply_to; as r) {
+                      <span class="quote">
+                        <b>{{ replyAuthor(r.sender_id) }}</b>
+                        {{ r.body ?? 'Message' }}
+                      </span>
+                    }
+                    @for (a of m.attachments; track a.id) {
+                      @if (m.type === 'image') {
+                        <a [href]="url(a.file_path)" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
+                          <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" />
+                        </a>
+                      } @else {
+                        <a class="bubble__file" [href]="url(a.file_path)" target="_blank" rel="noopener" download (click)="$event.stopPropagation()">
+                          <pm-icon name="file" [size]="12" /> {{ fileName(a.file_path) }}
+                        </a>
+                      }
+                    }
+                    @if (m.body) {
+                      <p>{{ m.body }}</p>
+                    }
                   }
-                }
-                @if (m.body) {
-                  <p>{{ m.body }}</p>
-                }
+                </div>
               </div>
+
+              @if (reactionCount(m).length) {
+                <span class="chips">
+                  @for (r of reactionCount(m); track r.emoji) {
+                    <button type="button" class="chip" [class.chip--mine]="r.mine" (click)="react(m, r.emoji)">
+                      {{ r.emoji }} {{ r.count }}
+                    </button>
+                  }
+                </span>
+              }
+
+              @if (isMine(m) && !m.deleted) {
+                <small class="tick" [class.tick--seen]="seen(m)">{{ seen(m) ? 'Seen' : 'Sent' }}</small>
+              }
+
+              @if (menuFor() === m.id) {
+                <div class="menu" role="menu">
+                  <span class="menu__emoji">
+                    @for (e of reactionChoices; track e) {
+                      <button type="button" (click)="react(m, e)">{{ e }}</button>
+                    }
+                  </span>
+                  <button type="button" (click)="startReply(m)">Reply</button>
+                  @if (canPin()) {
+                    <button type="button" (click)="togglePin(m)">Pin</button>
+                  }
+                  @if (isMine(m) && m.type === 'text') {
+                    <button type="button" (click)="startEdit(m)">Edit</button>
+                  }
+                  @if (isMine(m)) {
+                    <button type="button" class="menu__danger" (click)="remove(m)">Delete</button>
+                  }
+                </div>
+              }
             </div>
-          </div>
+          }
         } @empty {
           @if (!loading()) {
             <p class="feed__note">No messages yet. Make the first move.</p>
@@ -115,6 +197,18 @@
       </div>
 
       <footer class="composer">
+        @if (replyTo(); as r) {
+          <div class="ctx">
+            <span><b>Replying to {{ replyAuthor(r.sender.id) }}</b> {{ r.body ?? 'Message' }}</span>
+            <button type="button" aria-label="Cancel reply" (click)="replyTo.set(null)"><pm-icon name="close" [size]="10" /></button>
+          </div>
+        }
+        @if (editing()) {
+          <div class="ctx">
+            <span><b>Editing message</b></span>
+            <button type="button" aria-label="Cancel edit" (click)="cancelEdit()"><pm-icon name="close" [size]="10" /></button>
+          </div>
+        }
         <span class="pm-eyebrow composer__label">Your next move.</span>
         <div class="composer__box">
           <label class="composer__attach" aria-label="Attach a file" [class.busy]="sending()">
@@ -125,11 +219,11 @@
             type="text"
             [placeholder]="'Message ' + convo.name"
             [ngModel]="draft()"
-            (ngModelChange)="draft.set($event)"
+            (ngModelChange)="onDraft($event)"
             (keydown.enter)="send()"
           />
           <button class="pm-btn" type="button" (click)="send()">
-            <span>Send</span>
+            <span>{{ editing() ? 'Save' : 'Send' }}</span>
           </button>
         </div>
         <small class="composer__hint">{{ sendError() ?? (sending() ? 'Sending file…' : 'Enter to send') }}</small>

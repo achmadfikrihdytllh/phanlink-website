@@ -1,0 +1,6 @@
+{
+  "appId": "com.phanlink.app",
+  "appName": "PhanLink",
+  "webDir": "dist/phanlink-web/browser",
+  "server": { "androidScheme": "https" }
+}

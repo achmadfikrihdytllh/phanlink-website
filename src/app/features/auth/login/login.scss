@@ -108,3 +108,21 @@
     text-decoration: underline;
   }
 }
+.info {
+  margin: 0 0 16px;
+  color: var(--p5-white);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.forgot {
+  margin-top: -6px;
+  text-align: right;
+  font-size: 13px;
+
+  a {
+    color: var(--p5-white);
+  }
+}

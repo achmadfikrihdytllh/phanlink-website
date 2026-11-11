@@ -3,6 +3,8 @@ import { User } from './user';
 export interface ConversationParticipant
   extends Pick<User, 'id' | 'name' | 'username' | 'avatar' | 'status'> {
   role: 'member' | 'admin';
+  /** Null when the person hides read receipts. */
+  last_read_at?: string | null;
 }
 
 export interface LatestMessagePreview {
@@ -21,6 +23,7 @@ export interface Conversation {
   description?: string | null;
   created_by: number;
   unread_count?: number;
+  pinned_message?: { id: number; body: string | null; sender_id: number } | null;
   is_muted?: boolean;
   is_pinned?: boolean;
   participants: ConversationParticipant[];

@@ -13,6 +13,16 @@ export const routes: Routes = [
       import('./features/auth/register/register').then((m) => m.Register),
   },
   {
+    path: 'forgot-password',
+    loadComponent: () =>
+      import('./features/auth/forgot-password/forgot-password').then((m) => m.ForgotPassword),
+  },
+  {
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./features/auth/reset-password/reset-password').then((m) => m.ResetPassword),
+  },
+  {
     // Phantom Messenger shell: rail + one page per section.
     path: '',
     loadComponent: () => import('./features/shell/shell').then((m) => m.Shell),

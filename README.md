@@ -6,8 +6,9 @@ Antarmuka web **Phantom Messenger**, dibangun dengan Angular 22. Backend-nya ada
 
 Enam halaman dalam satu shell:
 
-- **Messages:** daftar percakapan, chat realtime, pesan baru, lampiran.
-- **Groups:** daftar grup, buat grup, undang anggota, file bersama, bisukan dan sematkan.
+- **Messages:** daftar percakapan dengan badge belum dibaca, chat realtime, pesan baru, lampiran, balas (reply), reaksi emoji, edit dan hapus, sematkan pesan, centang terkirim/dibaca, indikator "sedang mengetik", muat pesan lama saat menggulir.
+- **Groups:** daftar grup, buat grup, undang anggota, file bersama, bisukan dan sematkan, rencana/acara dengan RSVP, polling, edit grup, keluarkan anggota, keluar grup.
+- **Auth:** login, daftar, lupa dan reset password.
 - **Saved:** pesan tersimpan, koleksi, unduh file, lompat ke chat.
 - **Contacts:** daftar kontak, tambah kontak, nickname dan catatan, profil kontak.
 - **Search:** pencarian pesan dan file dengan filter percakapan.
@@ -74,9 +75,18 @@ src/environments/   alamat backend dev dan produksi
 public/             manifest PWA dan ikon
 ```
 
-## Menjadikan aplikasi Android
+## Deploy dan APK
 
-Setelah frontend dan backend online (HTTPS), bisa dibungkus dengan Capacitor atau PWABuilder tanpa biaya. Untuk PWABuilder, ikon manifest perlu PNG 192 dan 512.
+**Firebase Hosting (frontend, gratis tanpa kartu):**
+```bash
+# isi apiUrl di src/environments/environment.ts dengan alamat backend (HTTPS)
+npm run build
+npm i -g firebase-tools && firebase login && firebase init hosting   # pakai public = dist/phanlink-web/browser, SPA = yes
+firebase deploy
+```
+`firebase.json` dan `public/_redirects` (Netlify/Cloudflare Pages) sudah disediakan. Kosongkan `reverbHost` bila backend tidak menjalankan Reverb; chat tetap berfungsi tanpa update langsung.
+
+**APK tanpa memasang apa pun di PC:** workflow `.github/workflows/android-apk.yml` membangun APK debug di GitHub. Buka tab **Actions**, pilih **Build Android APK**, klik **Run workflow**, lalu unduh `phanlink-debug-apk` dari hasilnya. Syarat: backend sudah online (HTTPS), dan `FRONTEND_URL` di backend memuat `https://localhost` (asal WebView Capacitor).
 
 ## Perintah lain
 

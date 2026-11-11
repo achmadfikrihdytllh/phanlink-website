@@ -14,24 +14,30 @@ export interface ReplyToMessage {
   sender_id: number;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  user_ids: number[];
+}
+
 export interface Message {
   id: number;
   conversation_id: number;
   sender: Pick<User, 'id' | 'name' | 'username' | 'avatar'>;
   type: 'text' | 'image' | 'file' | 'system';
   body: string | null;
+  deleted?: boolean;
+  reactions?: MessageReaction[];
   reply_to: ReplyToMessage | null;
   attachments: MessageAttachment[];
   edited_at: string | null;
   created_at: string;
 }
 
+/** Messages come newest first; pass `before` (the oldest id you have) to get the page before it. */
 export interface MessagePaginatedResponse {
   messages: Message[];
   meta: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
+    has_more: boolean;
+    oldest_id: number | null;
   };
 }

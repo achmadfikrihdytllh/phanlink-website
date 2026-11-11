@@ -72,17 +72,94 @@
       </div>
 
       <div class="pm-pane pm-scroll">
-        @if (g.latest_message; as last) {
-          <section class="pm-card meetup">
-            <span class="meetup__time">
-              {{ last.created_at | date: 'HH:mm' }}<small>Latest</small>
-            </span>
-            <div>
-              <div class="pm-eyebrow">Latest message</div>
-              <small>{{ last.body }}</small>
-            </div>
-          </section>
-        }
+        <section class="pm-card">
+          <div class="plan__head">
+            <div class="pm-eyebrow">Upcoming plans / {{ events().length }}</div>
+            <button type="button" class="pm-btn" (click)="showEventForm.set(!showEventForm())">
+              <span>{{ showEventForm() ? 'Cancel' : 'New plan' }}</span>
+            </button>
+          </div>
+
+          @if (showEventForm()) {
+            <form class="form" (ngSubmit)="createEvent()">
+              <input name="title" [(ngModel)]="eventForm.title" placeholder="What's the plan?" maxlength="120" />
+              <input name="when" type="datetime-local" [(ngModel)]="eventForm.startsAt" />
+              <input name="where" [(ngModel)]="eventForm.location" placeholder="Where (optional)" maxlength="160" />
+              <textarea name="desc" rows="2" [(ngModel)]="eventForm.description" placeholder="Details (optional)"></textarea>
+              <button type="submit" class="pm-btn pm-btn--dark"><span>Create plan</span></button>
+            </form>
+          }
+
+          @for (e of events(); track e.id) {
+            <article class="plan">
+              <div class="plan__when">
+                <strong>{{ e.starts_at | date: 'd MMM' }}</strong>
+                <small>{{ e.starts_at | date: 'HH:mm' }}</small>
+              </div>
+              <div class="plan__body">
+                <strong>{{ e.title }}</strong>
+                @if (e.location) { <small>{{ e.location }}</small> }
+                @if (e.description) { <small>{{ e.description }}</small> }
+                <small>{{ e.counts.going }} going · {{ e.counts.maybe }} maybe · by {{ e.created_by.name }}</small>
+                <span class="rsvp">
+                  @for (s of rsvp; track s.id) {
+                    <button type="button" [class.on]="e.my_response === s.id" (click)="respond(e, s.id)">{{ s.label }}</button>
+                  }
+                </span>
+              </div>
+              @if (canManage(e.created_by.id)) {
+                <button type="button" class="x" aria-label="Delete plan" (click)="deleteEvent(e)">
+                  <pm-icon name="close" [size]="11" />
+                </button>
+              }
+            </article>
+          } @empty {
+            @if (!showEventForm()) { <p class="none">No plans yet. Make the first move.</p> }
+          }
+        </section>
+
+        <section class="pm-card">
+          <div class="plan__head">
+            <div class="pm-eyebrow">Polls / {{ polls().length }}</div>
+            <button type="button" class="pm-btn" (click)="showPollForm.set(!showPollForm())">
+              <span>{{ showPollForm() ? 'Cancel' : 'New poll' }}</span>
+            </button>
+          </div>
+
+          @if (showPollForm()) {
+            <form class="form" (ngSubmit)="createPoll()">
+              <input name="q" [(ngModel)]="pollQuestion" placeholder="Your question" maxlength="200" />
+              @for (o of pollOptions; track $index) {
+                <input [name]="'o' + $index" [(ngModel)]="pollOptions[$index]" [placeholder]="'Option ' + ($index + 1)" maxlength="100" />
+              }
+              <button type="button" class="pm-btn" (click)="addOption()"><span>Add option</span></button>
+              <button type="submit" class="pm-btn pm-btn--dark"><span>Create poll</span></button>
+            </form>
+          }
+
+          @for (p of polls(); track p.id) {
+            <article class="poll">
+              <header>
+                <strong>{{ p.question }}</strong>
+                @if (canManage(p.created_by)) {
+                  <button type="button" class="x" aria-label="Delete poll" (click)="deletePoll(p)">
+                    <pm-icon name="close" [size]="11" />
+                  </button>
+                }
+              </header>
+              @for (o of p.options; track o.id) {
+                <button type="button" class="opt" [class.opt--mine]="p.my_vote === o.id" (click)="vote(p, o.id)">
+                  <i [style.width.%]="percent(p, o.votes)"></i>
+                  <span>{{ o.label }}</span>
+                  <b>{{ o.votes }}</b>
+                </button>
+              }
+              <small>{{ p.total_votes }} votes</small>
+            </article>
+          }
+        </section>
+
+        @if (planError()) { <p class="none">{{ planError() }}</p> }
 
         <section class="pm-card">
           <div class="pm-eyebrow">Your confidants / {{ g.participants.length }}</div>
@@ -95,6 +172,11 @@
                 <span class="state" [class.state--on]="m.status === 'online'">
                   {{ m.status === 'online' ? 'Online' : 'Offline' }}
                 </span>
+                @if (isAdmin() && m.id !== meId) {
+                  <button type="button" class="x" [attr.aria-label]="'Remove ' + m.name" (click)="removeMember(m.id, m.name)">
+                    <pm-icon name="close" [size]="10" />
+                  </button>
+                }
               </li>
             }
           </ul>
@@ -108,8 +190,22 @@
       <div class="pm-eyebrow">The inner circle</div>
       <h2 class="pm-title">Group intel</h2>
       @if (selected(); as g) {
-        <p>{{ g.description || 'No description yet.' }}</p>
-        <button type="button" class="pm-btn invite" (click)="dialog.set('invite')"><span>Invite people</span></button>
+        @if (editingGroup()) {
+          <form class="form" (ngSubmit)="saveGroup()">
+            <input name="gn" [(ngModel)]="groupForm.name" placeholder="Group name" maxlength="255" />
+            <textarea name="gd" rows="3" [(ngModel)]="groupForm.description" placeholder="Description" maxlength="500"></textarea>
+            <button type="submit" class="pm-btn pm-btn--dark"><span>Save</span></button>
+          </form>
+        } @else {
+          <p>{{ g.description || 'No description yet.' }}</p>
+        }
+        @if (isAdmin()) {
+          <button type="button" class="pm-btn invite" (click)="dialog.set('invite')"><span>Invite people</span></button>
+          <button type="button" class="pm-btn invite" (click)="editingGroup() ? editingGroup.set(false) : startEditGroup()">
+            <span>{{ editingGroup() ? 'Cancel' : 'Edit group' }}</span>
+          </button>
+        }
+        <button type="button" class="pm-btn invite leave" (click)="leave()"><span>Leave group</span></button>
       }
     </section>
 

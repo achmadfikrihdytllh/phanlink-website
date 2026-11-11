@@ -8,6 +8,10 @@ import { User } from '../models/user';
 import {
   Contact,
   ContactDetail,
+  GroupEvent,
+  GroupEventInput,
+  Poll,
+  RsvpStatus,
   SavedCollection,
   SavedItem,
   SavedResponse,
@@ -63,6 +67,75 @@ export class PhantomApi {
         user_ids: userIds,
       })
       .pipe(map((r) => r.conversation));
+  }
+
+  // ---- group management ----
+  updateGroup(conversationId: number, data: { name?: string; description?: string | null }): Observable<Conversation> {
+    return this.http
+      .patch<{ conversation: Conversation }>(`${this.api}/conversations/${conversationId}`, data)
+      .pipe(map((r) => r.conversation));
+  }
+
+  /** Remove a member, or leave the group when `userId` is yourself. Returns the group, or null after leaving. */
+  removeMember(conversationId: number, userId: number): Observable<Conversation | null> {
+    return this.http
+      .delete<{ conversation: Conversation | null }>(`${this.api}/conversations/${conversationId}/participants/${userId}`)
+      .pipe(map((r) => r.conversation));
+  }
+
+  pinMessage(conversationId: number, messageId: number | null): Observable<Conversation> {
+    return this.http
+      .post<{ conversation: Conversation }>(`${this.api}/conversations/${conversationId}/pin`, { message_id: messageId })
+      .pipe(map((r) => r.conversation));
+  }
+
+  // ---- group events ----
+  events(conversationId: number): Observable<GroupEvent[]> {
+    return this.http
+      .get<{ events: GroupEvent[] }>(`${this.api}/conversations/${conversationId}/events`)
+      .pipe(map((r) => r.events));
+  }
+
+  createEvent(conversationId: number, data: GroupEventInput): Observable<GroupEvent> {
+    return this.http
+      .post<{ event: GroupEvent }>(`${this.api}/conversations/${conversationId}/events`, data)
+      .pipe(map((r) => r.event));
+  }
+
+  deleteEvent(eventId: number): Observable<unknown> {
+    return this.http.delete(`${this.api}/events/${eventId}`);
+  }
+
+  respondToEvent(eventId: number, status: RsvpStatus): Observable<GroupEvent> {
+    return this.http.post<{ event: GroupEvent }>(`${this.api}/events/${eventId}/respond`, { status }).pipe(map((r) => r.event));
+  }
+
+  // ---- group polls ----
+  polls(conversationId: number): Observable<Poll[]> {
+    return this.http.get<{ polls: Poll[] }>(`${this.api}/conversations/${conversationId}/polls`).pipe(map((r) => r.polls));
+  }
+
+  createPoll(conversationId: number, question: string, options: string[]): Observable<Poll> {
+    return this.http
+      .post<{ poll: Poll }>(`${this.api}/conversations/${conversationId}/polls`, { question, options })
+      .pipe(map((r) => r.poll));
+  }
+
+  vote(pollId: number, optionId: number): Observable<Poll> {
+    return this.http.post<{ poll: Poll }>(`${this.api}/polls/${pollId}/vote`, { option_id: optionId }).pipe(map((r) => r.poll));
+  }
+
+  deletePoll(pollId: number): Observable<unknown> {
+    return this.http.delete(`${this.api}/polls/${pollId}`);
+  }
+
+  // ---- password reset ----
+  forgotPassword(email: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.api}/forgot-password`, { email });
+  }
+
+  resetPassword(data: { token: string; email: string; password: string; password_confirmation: string }): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.api}/reset-password`, data);
   }
 
   // ---- contacts ----
