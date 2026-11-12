@@ -145,20 +145,53 @@ export class Messages implements OnInit, OnDestroy {
     this.loadConversations(true);
 
     // No websocket server (free deploy): fall back to a light poll so new messages still show up.
-    if (!environment.reverbHost) this.pollTimer = setInterval(() => this.poll(), 8000);
+    if (!environment.reverbHost) this.pollTimer = setInterval(() => this.poll(), 6000);
   }
 
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   /** True while a poll round is still running, so slow responses never pile up or arrive out of order. */
   private polling = false;
+  private pollRound = 0;
 
+  /**
+   * Cheap poll: every round asks only for messages newer than the newest one we have (one small request).
+   * Every 5th round also refreshes the conversation list and the latest page (edits, reactions).
+   */
   private poll(): void {
     if (document.hidden || this.polling) return;
     this.polling = true;
+    this.pollRound++;
 
     const id = this.activeConversationId;
+    const full = this.pollRound % 5 === 0;
     const done = () => (this.polling = false);
+
+    const fetchMessages = () => {
+      if (!id) return done();
+      const newest = this.messages()
+        .map((m) => m.id)
+        .filter((n) => n > 0)
+        .reduce((a, b) => Math.max(a, b), 0);
+
+      this.messageService
+        .getMessages(id, undefined, full || !newest ? undefined : newest)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (res) => {
+            if (this.activeConversationId !== id) return;
+            const known = new Set(this.messages().map((m) => m.id));
+            for (const m of [...res.messages].reverse()) {
+              if (known.has(m.id)) this.replaceMessage(m);
+              else this.append(m);
+            }
+          },
+          error: done,
+          complete: done,
+        });
+    };
+
+    if (!full) return fetchMessages();
 
     this.conversationService
       .list()
@@ -170,24 +203,7 @@ export class Messages implements OnInit, OnDestroy {
           );
         },
         error: done,
-        complete: () => {
-          if (!id) return done();
-          this.messageService
-            .getMessages(id)
-            .pipe(takeUntilDestroyed(this.destroyRef))
-            .subscribe({
-              next: (res) => {
-                if (this.activeConversationId !== id) return;
-                const known = new Set(this.messages().map((m) => m.id));
-                for (const m of [...res.messages].reverse()) {
-                  if (known.has(m.id)) this.replaceMessage(m);
-                  else this.append(m);
-                }
-              },
-              error: done,
-              complete: done,
-            });
-        },
+        complete: fetchMessages,
       });
   }
 
@@ -322,13 +338,32 @@ export class Messages implements OnInit, OnDestroy {
     const reply = this.replyTo();
     this.draft.set('');
     this.replyTo.set(null);
+
+    // Show the message right away (negative temporary id); swap it for the real one when the server answers.
+    const me = this.auth.currentUser();
+    const tempId = -Date.now();
+    const temp: Message = {
+      id: tempId,
+      conversation_id: id,
+      sender: { id: this.currentUserId, name: me?.name ?? '', username: me?.username ?? '', avatar: me?.avatar ?? null },
+      type: 'text',
+      body,
+      reply_to: reply ? { id: reply.id, body: reply.body, sender_id: reply.sender?.id ?? 0 } : null,
+      attachments: [],
+      edited_at: null,
+      created_at: new Date().toISOString(),
+    };
+    this.messages.update((list) => [...list, temp]);
+
     this.messageService.sendText(id, body, reply?.id).subscribe({
       next: (res) => {
+        this.messages.update((list) => list.filter((m) => m.id !== tempId));
         this.append(res.data);
         this.markRead(id);
       },
-      // Put the text back so a failed send is never silently lost.
+      // Take the temporary bubble away and put the text back so a failed send is never silently lost.
       error: () => {
+        this.messages.update((list) => list.filter((m) => m.id !== tempId));
         this.draft.set(body);
         this.replyTo.set(reply);
       },

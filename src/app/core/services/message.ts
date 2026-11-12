@@ -13,8 +13,8 @@ export class MessageService {
   constructor(private http: HttpClient) {}
 
   /** Newest page, or the page of older messages before `before`. */
-  getMessages(conversationId: number, before?: number): Observable<MessagePaginatedResponse> {
-    const query = before ? `?before=${before}` : '';
+  getMessages(conversationId: number, before?: number, after?: number): Observable<MessagePaginatedResponse> {
+    const query = before ? `?before=${before}` : after ? `?after=${after}` : '';
     return this.http.get<MessagePaginatedResponse>(
       `${this.apiUrl}/conversations/${conversationId}/messages${query}`
     );
