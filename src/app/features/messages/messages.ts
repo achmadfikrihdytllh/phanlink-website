@@ -165,10 +165,15 @@ export class Messages implements OnInit, OnDestroy {
 
     const id = this.activeConversationId;
     const full = this.pollRound % 5 === 0;
-    const done = () => (this.polling = false);
+    const done = (): void => {
+      this.polling = false;
+    };
 
-    const fetchMessages = () => {
-      if (!id) return done();
+    const fetchMessages = (): void => {
+      if (!id) {
+        done();
+        return;
+      }
       const newest = this.messages()
         .map((m) => m.id)
         .filter((n) => n > 0)
@@ -191,7 +196,10 @@ export class Messages implements OnInit, OnDestroy {
         });
     };
 
-    if (!full) return fetchMessages();
+    if (!full) {
+      fetchMessages();
+      return;
+    }
 
     this.conversationService
       .list()
