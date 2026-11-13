@@ -129,6 +129,7 @@
                 <div
                   class="bubble"
                   [class.bubble--gone]="m.deleted"
+                  [class.bubble--ping]="pingsMe(m)"
                   [class.bubble--open]="menuFor() === m.id"
                   tabindex="0"
                   (click)="toggleMenu(m)"
@@ -155,7 +156,15 @@
                       }
                     }
                     @if (m.body) {
-                      <p>{{ m.body }}</p>
+                      <p>
+                        @for (part of parts(m); track $index) {
+                          @if (part.mention) {
+                            <b class="mention" [class.mention--me]="part.mention === myUsername">{{ part.text }}</b>
+                          } @else {
+                            <span>{{ part.text }}</span>
+                          }
+                        }
+                      </p>
                     }
                   }
                 </div>
@@ -217,17 +226,41 @@
           </div>
         }
         <span class="pm-eyebrow composer__label">Your next move.</span>
+        @if (mentionOptions(); as options) {
+          @if (options.length) {
+            <ul class="mentions" role="listbox" aria-label="Tag a member">
+              @for (p of options; track p.id; let i = $index) {
+                <li
+                  role="option"
+                  [class.mentions__on]="i === mentionIndex()"
+                  [attr.aria-selected]="i === mentionIndex()"
+                  (mousedown)="$event.preventDefault(); pickMention(p.username)"
+                >
+                  <pm-avatar [name]="p.name" [src]="p.avatar" />
+                  <strong>{{ p.name }}</strong>
+                  <small>&#64;{{ p.username }}</small>
+                </li>
+              }
+            </ul>
+          }
+        }
         <div class="composer__box">
           <label class="composer__attach" aria-label="Attach a file" [class.busy]="sending()">
             <pm-icon name="link" [size]="13" />
             <input type="file" hidden #file (change)="attach(file)" />
           </label>
           <input
+            #box
             type="text"
-            [placeholder]="'Message ' + convo.name"
+            [placeholder]="convo.type === 'group' ? 'Message ' + convo.name + ' · @ to tag' : 'Message ' + convo.name"
             [ngModel]="draft()"
             (ngModelChange)="onDraft($event)"
-            (keydown.enter)="send()"
+            (keydown)="onComposerKey($event)"
+            (keydown.enter)="onEnter($event)"
+            (click)="syncMention()"
+            (keyup.arrowleft)="syncMention()"
+            (keyup.arrowright)="syncMention()"
+            autocomplete="off"
           />
           <button class="pm-btn" type="button" (click)="send()">
             <span>{{ editing() ? 'Save' : 'Send' }}</span>

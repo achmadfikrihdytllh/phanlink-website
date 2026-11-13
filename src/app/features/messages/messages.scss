@@ -313,8 +313,47 @@
 }
 
 .composer {
+  position: relative;
   padding: 12px 18px 10px;
   background: var(--pm-ink);
+
+  .mentions {
+    position: absolute;
+    left: 18px;
+    right: 18px;
+    bottom: calc(100% - 6px);
+    z-index: 5;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    background: #fff;
+    border: 2px solid var(--pm-ink);
+    box-shadow: 4px 4px 0 var(--pm-red);
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font: 600 10px/1 var(--pm-font-ui);
+      color: var(--pm-ink);
+    }
+
+    small {
+      color: #777;
+      font: 500 9px/1 var(--pm-font-ui);
+    }
+  }
+
+  .mentions__on {
+    background: var(--pm-red);
+    color: #fff;
+
+    small {
+      color: #fff;
+    }
+  }
 
   &__label {
     display: block;
@@ -695,4 +734,20 @@
     color: inherit;
     cursor: pointer;
   }
+}
+
+.mention {
+  font-weight: 800;
+  color: var(--pm-red);
+
+  &--me {
+    padding: 0 3px;
+    background: var(--pm-red);
+    color: #fff;
+  }
+}
+
+.bubble--ping {
+  outline: 2px solid var(--pm-ink);
+  outline-offset: 2px;
 }

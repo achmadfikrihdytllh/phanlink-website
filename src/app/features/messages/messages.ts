@@ -26,6 +26,7 @@ import { Message, MessageAttachment } from '../../core/models/message';
 import { Appearance } from '../../core/services/appearance';
 import { assetUrl } from '../../core/util/asset-url';
 import { lastSeenText } from '../../core/util/last-seen';
+import { ActiveMention, MentionPart, activeMention, applyMention, mentionsUser, splitMentions } from '../../core/util/mentions';
 import { PmAvatar } from '../../shared/avatar/avatar';
 import { PmIcon } from '../../shared/icon/icon';
 import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
@@ -52,6 +53,7 @@ export class Messages implements OnInit, OnDestroy {
   private appearance = inject(Appearance);
 
   private feed = viewChild<ElementRef<HTMLElement>>('feed');
+  private box = viewChild<ElementRef<HTMLInputElement>>('box');
 
   readonly reactionChoices = ['👍', '❤️', '😂', '😮', '🙏'];
 
@@ -73,6 +75,26 @@ export class Messages implements OnInit, OnDestroy {
   replyTo = signal<Message | null>(null);
   editing = signal<Message | null>(null);
 
+  /** The "@name" being typed right now (groups only) and which suggestion is highlighted. */
+  mention = signal<ActiveMention | null>(null);
+  mentionIndex = signal(0);
+
+  /** Group members matching what was typed after "@", best matches first. */
+  mentionOptions = computed(() => {
+    const m = this.mention();
+    const c = this.selected();
+    if (!m || !c || c.type !== 'group') return [];
+
+    const q = m.query.toLowerCase();
+    return c.participants
+      .filter((p) => p.id !== this.currentUserId)
+      .filter((p) => !q || p.username.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+      .sort((a, b) => Number(b.username.toLowerCase().startsWith(q)) - Number(a.username.toLowerCase().startsWith(q)))
+      .slice(0, 5);
+  });
+
+  private partsCache = new Map<string, MentionPart[]>();
+
   /** Ticks every 30s so "last seen 5 min ago" keeps moving without any request. */
   private now = signal(Date.now());
 
@@ -86,6 +108,7 @@ export class Messages implements OnInit, OnDestroy {
 
   currentUserId = this.auth.currentUser()?.id ?? 0;
   private myName = this.auth.currentUser()?.name ?? '';
+  myUsername = this.auth.currentUser()?.username ?? '';
 
   filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
@@ -372,6 +395,84 @@ export class Messages implements OnInit, OnDestroy {
   onDraft(value: string): void {
     this.draft.set(value);
     this.sendTyping(value);
+    queueMicrotask(() => this.syncMention());
+  }
+
+  /** Message text split into plain parts and highlighted tags of this group's members. */
+  parts(m: Message): MentionPart[] {
+    const body = m.body ?? '';
+    const c = this.selected();
+    if (!c || c.type !== 'group' || !body.includes('@')) return [{ text: body }];
+
+    const key = `${c.id}|${body}`;
+    let hit = this.partsCache.get(key);
+    if (!hit) {
+      hit = splitMentions(body, c.participants.map((p) => p.username));
+      if (this.partsCache.size > 500) this.partsCache.clear();
+      this.partsCache.set(key, hit);
+    }
+    return hit;
+  }
+
+  /** True when a group message tags me, so the bubble can stand out. */
+  pingsMe(m: Message): boolean {
+    return this.selected()?.type === 'group' && !this.isMine(m) && !m.deleted && mentionsUser(m.body, this.auth.currentUser()?.username);
+  }
+
+  /** Re-reads the caret to see whether a tag is being typed. */
+  syncMention(): void {
+    const el = this.box()?.nativeElement;
+    const next = el ? activeMention(el.value, el.selectionStart ?? el.value.length) : null;
+    this.mention.set(next);
+    if (!next) this.mentionIndex.set(0);
+  }
+
+  pickMention(username: string): void {
+    const el = this.box()?.nativeElement;
+    const m = this.mention();
+    if (!el || !m) return;
+
+    const caret = el.selectionStart ?? el.value.length;
+    const out = applyMention(el.value, m, caret, username);
+
+    this.draft.set(out.text);
+    this.mention.set(null);
+    this.mentionIndex.set(0);
+    this.sendTyping(out.text);
+
+    setTimeout(() => {
+      el.value = out.text;
+      el.focus();
+      el.setSelectionRange(out.caret, out.caret);
+    });
+  }
+
+  /** Arrow keys, Tab and Escape drive the suggestion list while it is open. */
+  onComposerKey(e: KeyboardEvent): void {
+    const options = this.mentionOptions();
+    if (!options.length) return;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      this.mentionIndex.set((this.mentionIndex() + step + options.length) % options.length);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      this.pickMention(options[Math.min(this.mentionIndex(), options.length - 1)].username);
+    } else if (e.key === 'Escape') {
+      this.mention.set(null);
+    }
+  }
+
+  /** Enter picks the highlighted suggestion while the list is open; otherwise it sends. */
+  onEnter(e: Event): void {
+    const options = this.mentionOptions();
+    if (options.length) {
+      e.preventDefault();
+      this.pickMention(options[Math.min(this.mentionIndex(), options.length - 1)].username);
+      return;
+    }
+    this.send();
   }
 
   send(): void {
