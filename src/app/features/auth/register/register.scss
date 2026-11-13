@@ -65,6 +65,18 @@
   }
 }
 
+.field-input.invalid {
+  border-color: var(--p5-yellow);
+  outline: 2px solid var(--p5-yellow);
+}
+
+.field-error {
+  margin: -8px 0 0 2px;
+  color: var(--p5-yellow);
+  font-weight: 700;
+  font-size: 12px;
+}
+
 .error-text {
   color: var(--p5-yellow);
   font-weight: 700;

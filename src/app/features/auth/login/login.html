@@ -10,8 +10,13 @@
           formControlName="login"
           placeholder="Email atau Username"
           class="field-input"
+          [class.invalid]="!!fieldError('login')"
+          [attr.aria-invalid]="!!fieldError('login')"
         />
       </div>
+      @if (fieldError('login'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="field">
         <div class="field-shadow"></div>
@@ -20,8 +25,13 @@
           formControlName="password"
           placeholder="Password"
           class="field-input"
+          [class.invalid]="!!fieldError('password')"
+          [attr.aria-invalid]="!!fieldError('password')"
         />
       </div>
+      @if (fieldError('password'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="forgot"><a routerLink="/forgot-password">Lupa password?</a></div>
 

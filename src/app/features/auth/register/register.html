@@ -5,23 +5,43 @@
     <form [formGroup]="form" (ngSubmit)="onSubmit()" class="register-form">
       <div class="field">
         <div class="field-shadow"></div>
-        <input type="text" formControlName="name" placeholder="Nama Lengkap" class="field-input" />
+        <input type="text" formControlName="name" placeholder="Nama Lengkap" class="field-input"
+          [class.invalid]="!!fieldError('name')"
+          [attr.aria-invalid]="!!fieldError('name')" />
       </div>
+      @if (fieldError('name'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="field">
         <div class="field-shadow"></div>
-        <input type="text" formControlName="username" placeholder="Username" class="field-input" />
+        <input type="text" formControlName="username" placeholder="Username" class="field-input"
+          [class.invalid]="!!fieldError('username')"
+          [attr.aria-invalid]="!!fieldError('username')" />
       </div>
+      @if (fieldError('username'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="field">
         <div class="field-shadow"></div>
-        <input type="email" formControlName="email" placeholder="Email" class="field-input" />
+        <input type="email" formControlName="email" placeholder="Email" class="field-input"
+          [class.invalid]="!!fieldError('email')"
+          [attr.aria-invalid]="!!fieldError('email')" />
       </div>
+      @if (fieldError('email'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="field">
         <div class="field-shadow"></div>
-        <input type="password" formControlName="password" placeholder="Password" class="field-input" />
+        <input type="password" formControlName="password" placeholder="Password" class="field-input"
+          [class.invalid]="!!fieldError('password')"
+          [attr.aria-invalid]="!!fieldError('password')" />
       </div>
+      @if (fieldError('password'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       <div class="field">
         <div class="field-shadow"></div>
@@ -30,8 +50,13 @@
           formControlName="password_confirmation"
           placeholder="Konfirmasi Password"
           class="field-input"
+          [class.invalid]="!!fieldError('password_confirmation')"
+          [attr.aria-invalid]="!!fieldError('password_confirmation')"
         />
       </div>
+      @if (fieldError('password_confirmation'); as e) {
+        <div class="field-error">{{ e }}</div>
+      }
 
       @if (errorMessage()) {
         <div class="error-text">{{ errorMessage() }}</div>
