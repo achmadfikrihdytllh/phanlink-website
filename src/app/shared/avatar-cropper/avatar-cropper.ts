@@ -71,6 +71,9 @@ const MAX_ZOOM = 4;
   `,
   styles: `
     :host {
+      /* The app shell zooms the whole UI on phones/tablets (--z: 1.6 / 1.25); undo it here so the sizes
+         below mean real pixels and fitBox() matches what is on screen. */
+      zoom: calc(1 / var(--z, 1));
       position: fixed;
       inset: 0;
       z-index: 60;
@@ -93,6 +96,7 @@ const MAX_ZOOM = 4;
       overflow-y: auto;
       padding: 16px;
       background: var(--pm-paper, #fff);
+      color: var(--pm-ink, #0d0d0f); /* the shell sets white text; this dialog is light */
       border: 2px solid var(--pm-ink, #0d0d0f);
       box-shadow: 6px 6px 0 var(--pm-red, #e4182c);
       outline: none;
