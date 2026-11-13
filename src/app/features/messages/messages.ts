@@ -260,7 +260,7 @@ export class Messages implements OnInit, OnDestroy {
       .subscribe({
         next: (res) => {
           this.conversations.set(
-            res.conversations.map((c) => (c.id === this.activeConversationId ? { ...c, unread_count: 0 } : c)),
+            res.conversations.map((c) => (c.id === this.activeConversationId ? { ...c, unread_count: 0, has_unread_mention: false } : c)),
           );
         },
         error: done,
@@ -283,7 +283,7 @@ export class Messages implements OnInit, OnDestroy {
           const prev = this.conversations();
           // Keep the unread count we already cleared locally for the open chat.
           this.conversations.set(
-            res.conversations.map((c) => (c.id === this.activeConversationId ? { ...c, unread_count: 0 } : c)),
+            res.conversations.map((c) => (c.id === this.activeConversationId ? { ...c, unread_count: 0, has_unread_mention: false } : c)),
           );
           // Listen to every conversation so the list updates live, not just the open chat.
           res.conversations.forEach((c) => this.watch(c.id));
@@ -332,7 +332,7 @@ export class Messages implements OnInit, OnDestroy {
     this.cancelEdit();
     this.loading.set(true);
     this.lastKey = 0;
-    this.patchConversation(conversation.id, { unread_count: 0 });
+    this.patchConversation(conversation.id, { unread_count: 0, has_unread_mention: false });
     this.watch(conversation.id);
 
     this.messageService
@@ -726,6 +726,9 @@ export class Messages implements OnInit, OnDestroy {
       const updated: Conversation = {
         ...row,
         unread_count: unread && !row.is_muted ? (row.unread_count ?? 0) + 1 : row.unread_count,
+        // A tag of me in a group is flagged even when the chat is muted.
+        has_unread_mention:
+          row.has_unread_mention || (unread && row.type === 'group' && mentionsUser(message.body, this.auth.currentUser()?.username)),
         latest_message: {
           id: message.id,
           body: message.body,

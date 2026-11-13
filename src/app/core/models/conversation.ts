@@ -25,6 +25,8 @@ export interface Conversation {
   description?: string | null;
   created_by: number;
   unread_count?: number;
+  /** Group only: an unread message tags me with @username. */
+  has_unread_mention?: boolean;
   pinned_message?: { id: number; body: string | null; sender_id: number } | null;
   is_muted?: boolean;
   is_pinned?: boolean;

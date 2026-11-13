@@ -154,6 +154,16 @@
     color: var(--pm-muted);
   }
 
+  /* "@" chip: someone tagged you in this group. */
+  &__tag {
+    padding: 3px 5px;
+    background: #fff;
+    color: var(--pm-red);
+    border: 1px solid var(--pm-red);
+    font: 800 8px/1 var(--pm-font-ui);
+    transform: skewX(-8deg);
+  }
+
   &__badge {
     min-width: 14px;
     padding: 3px 4px;

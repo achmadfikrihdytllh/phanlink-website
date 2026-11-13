@@ -45,6 +45,9 @@
             @if (c.latest_message; as last) {
               <time class="convo__time">{{ last.created_at | date: 'HH:mm' }}</time>
             }
+            @if (c.has_unread_mention) {
+              <span class="convo__tag" title="Someone tagged you" aria-label="Someone tagged you">&#64;</span>
+            }
             @if (c.unread_count) {
               <span class="convo__badge">{{ c.unread_count }}</span>
             }
