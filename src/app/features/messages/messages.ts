@@ -25,6 +25,7 @@ import { Conversation } from '../../core/models/conversation';
 import { Message, MessageAttachment } from '../../core/models/message';
 import { Appearance } from '../../core/services/appearance';
 import { assetUrl } from '../../core/util/asset-url';
+import { shrinkImage } from '../../core/util/image-shrink';
 import { lastSeenText } from '../../core/util/last-seen';
 import { ActiveMention, MentionPart, activeMention, applyMention, mentionsUser, splitMentions } from '../../core/util/mentions';
 import { PmAvatar } from '../../shared/avatar/avatar';
@@ -537,17 +538,21 @@ export class Messages implements OnInit, OnDestroy {
 
     this.sending.set(true);
     this.sendError.set(null);
-    this.messageService.sendFile(id, file, this.replyTo()?.id).subscribe({
-      next: (res) => {
-        this.append(res.data);
-        this.replyTo.set(null);
-        this.sending.set(false);
-      },
-      error: () => {
-        this.sendError.set('Could not send the file (max 10 MB).');
-        this.sending.set(false);
-      },
-    });
+
+    // Big photos are shrunk first: much faster to upload on a phone connection and to open for everyone else.
+    void shrinkImage(file).then((ready) =>
+      this.messageService.sendFile(id, ready, this.replyTo()?.id).subscribe({
+        next: (res) => {
+          this.append(res.data);
+          this.replyTo.set(null);
+          this.sending.set(false);
+        },
+        error: () => {
+          this.sendError.set('Could not send the file (max 10 MB).');
+          this.sending.set(false);
+        },
+      }),
+    );
   }
 
   startReply(m: Message): void {

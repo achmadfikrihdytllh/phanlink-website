@@ -150,7 +150,7 @@
                     @for (a of m.attachments; track a.id) {
                       @if (m.type === 'image') {
                         <a [href]="url(a.file_path)" target="_blank" rel="noopener" (click)="$event.stopPropagation()">
-                          <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" />
+                          <img class="bubble__img" [src]="url(a.file_path)" [alt]="fileName(a.file_path)" loading="lazy" decoding="async" />
                         </a>
                       } @else {
                         <a class="bubble__file" [href]="url(a.file_path)" target="_blank" rel="noopener" download (click)="$event.stopPropagation()">

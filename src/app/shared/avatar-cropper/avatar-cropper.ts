@@ -4,12 +4,12 @@ import { clampOffset, coverScale, sourceRect, zoomOffset } from './crop-math';
 
 /** Side of the square crop window on screen, and of the picture that gets uploaded. */
 const BOX = 280;
-const OUTPUT = 512;
+const OUTPUT = 256;
 const MAX_ZOOM = 4;
 
 /**
  * Crop dialog for a profile photo: drag to move, slide or scroll to zoom, then "Use photo".
- * Emits a square JPEG (512x512), so avatars always look the same however the original was shaped.
+ * Emits a square JPEG (256x256, plenty for the largest avatar on screen), so avatars always look the same however the original was shaped.
  */
 @Component({
   selector: 'pm-avatar-cropper',
@@ -283,7 +283,7 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
         this.cropped.emit(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
       },
       'image/jpeg',
-      0.9,
+      0.88,
     );
   }
 }

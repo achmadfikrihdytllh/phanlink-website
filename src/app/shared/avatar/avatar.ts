@@ -7,7 +7,7 @@ import { assetUrl } from '../../core/util/asset-url';
   selector: 'pm-avatar',
   template: `
     @if (url(); as src) {
-      <img [src]="src" [alt]="name()" />
+      <img [src]="src" [alt]="name()" loading="lazy" decoding="async" />
     } @else {
       {{ initial() }}
     }

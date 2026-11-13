@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
+import type Echo from 'laravel-echo';
 import { environment } from '../../../environments/environment';
 
 export interface ConversationHandlers {
@@ -16,34 +15,45 @@ export interface ConversationHandlers {
 export class EchoService {
   private echo: Echo<any> | null = null;
 
-  connect(): Echo<any> {
-    if (this.echo) {
-      return this.echo;
-    }
+  private loading: Promise<Echo<any>> | null = null;
 
-    (window as any).Pusher = Pusher;
+  /**
+   * Opens the websocket connection. The two libraries behind it (laravel-echo, pusher-js) are only downloaded
+   * here, so a deploy without a realtime host never pays for them.
+   */
+  private connect(): Promise<Echo<any>> {
+    if (this.echo) return Promise.resolve(this.echo);
 
-    const token = localStorage.getItem('token');
-    const broadcastAuthUrl = environment.apiUrl.replace('/api', '') + '/broadcasting/auth';
+    this.loading ??= Promise.all([import('laravel-echo'), import('pusher-js')]).then(
+      ([{ default: EchoClient }, { default: Pusher }]) => {
+        (window as any).Pusher = Pusher;
 
-    this.echo = new Echo({
-      broadcaster: 'reverb',
-      key: environment.reverbAppKey,
-      wsHost: environment.reverbHost,
-      wsPort: environment.reverbPort,
-      wssPort: environment.reverbPort,
-      forceTLS: environment.reverbScheme === 'https',
-      enabledTransports: ['ws', 'wss'],
-      authEndpoint: broadcastAuthUrl,
-      auth: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-        },
+        const token = localStorage.getItem('token');
+        const broadcastAuthUrl = environment.apiUrl.replace('/api', '') + '/broadcasting/auth';
+
+        const client = new EchoClient({
+          broadcaster: 'reverb',
+          key: environment.reverbAppKey,
+          wsHost: environment.reverbHost,
+          wsPort: environment.reverbPort,
+          wssPort: environment.reverbPort,
+          forceTLS: environment.reverbScheme === 'https',
+          enabledTransports: ['ws', 'wss'],
+          authEndpoint: broadcastAuthUrl,
+          auth: {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+          },
+        });
+
+        this.echo = client;
+        return client;
       },
-    });
+    );
 
-    return this.echo;
+    return this.loading;
   }
 
   /** Conversations we already listen to, so a second subscribe never doubles the handlers. */
@@ -60,11 +70,21 @@ export class EchoService {
     this.watching.add(conversationId);
 
     this.connect()
-      .private(`conversation.${conversationId}`)
-      .listen('.message.sent', handlers.sent)
-      .listen('.message.changed', handlers.changed)
-      .listenForWhisper('typing', handlers.typing)
-      .listenForWhisper('read', handlers.read);
+      .then((echo) => {
+        // Left the chat while the libraries were still loading.
+        if (!this.watching.has(conversationId)) return;
+
+        echo
+          .private(`conversation.${conversationId}`)
+          .listen('.message.sent', handlers.sent)
+          .listen('.message.changed', handlers.changed)
+          .listenForWhisper('typing', handlers.typing)
+          .listenForWhisper('read', handlers.read);
+      })
+      .catch(() => {
+        // Realtime is optional: if it cannot load, polling and normal requests still work.
+        this.watching.delete(conversationId);
+      });
   }
 
   /** Tell the other members something small (typing, read) without touching the server. */
@@ -85,5 +105,6 @@ export class EchoService {
     this.watching.clear();
     this.echo?.disconnect();
     this.echo = null;
+    this.loading = null;
   }
 }
