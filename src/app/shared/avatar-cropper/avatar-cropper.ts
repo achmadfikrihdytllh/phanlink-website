@@ -2,9 +2,17 @@ import { Component, OnDestroy, OnInit, computed, input, output, signal } from '@
 
 import { clampOffset, coverScale, sourceRect, zoomOffset } from './crop-math';
 
-/** Side of the square crop window on screen, and of the picture that gets uploaded. */
-const BOX = 280;
+/** Largest side of the square crop window on screen; it shrinks to fit small or landscape phones. */
+const BOX_MAX = 280;
+const BOX_MIN = 160;
+/** Picture that gets uploaded. */
 const OUTPUT = 256;
+
+/** Crop window that fits the screen: side margins and dialog padding off the width, the rest of the dialog off the height. */
+function fitBox(): number {
+  const room = Math.min(window.innerWidth - 56, window.innerHeight - 300);
+  return Math.max(BOX_MIN, Math.min(BOX_MAX, Math.floor(room)));
+}
 const MAX_ZOOM = 4;
 
 /**
@@ -13,6 +21,7 @@ const MAX_ZOOM = 4;
  */
 @Component({
   selector: 'pm-avatar-cropper',
+  host: { '(window:resize)': 'onResize()' },
   template: `
     <div class="back" (click)="cancelled.emit()"></div>
     <div class="dlg" role="dialog" aria-modal="true" aria-label="Crop photo" tabindex="-1" (keydown.escape)="cancelled.emit()">
@@ -20,8 +29,8 @@ const MAX_ZOOM = 4;
 
       <div
         class="stage"
-        [style.width.px]="box"
-        [style.height.px]="box"
+        [style.width.px]="box()"
+        [style.height.px]="box()"
         (pointerdown)="down($event)"
         (pointermove)="move($event)"
         (pointerup)="up($event)"
@@ -78,7 +87,10 @@ const MAX_ZOOM = 4;
       display: grid;
       gap: 10px;
       justify-items: center;
-      width: min(92vw, 340px);
+      box-sizing: border-box;
+      width: min(calc(100vw - 16px), 340px);
+      max-height: calc(100dvh - 16px);
+      overflow-y: auto;
       padding: 16px;
       background: var(--pm-paper, #fff);
       border: 2px solid var(--pm-ink, #0d0d0f);
@@ -92,6 +104,7 @@ const MAX_ZOOM = 4;
       letter-spacing: 0.06em;
     }
     .stage {
+      box-sizing: content-box; /* the box size is the photo area, border excluded */
       position: relative;
       overflow: hidden;
       background: #111;
@@ -127,6 +140,7 @@ const MAX_ZOOM = 4;
     }
     .zoom input {
       width: 100%;
+      min-height: 28px; /* easier to grab with a thumb */
       accent-color: var(--pm-red, #e4182c);
     }
     small {
@@ -145,7 +159,8 @@ const MAX_ZOOM = 4;
       width: 100%;
     }
     button {
-      padding: 8px 14px;
+      min-height: 40px;
+      padding: 8px 16px;
       border: 2px solid var(--pm-ink, #0d0d0f);
       font: 800 10px/1 var(--pm-font-ui);
       text-transform: uppercase;
@@ -169,7 +184,8 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
   cropped = output<File>();
   cancelled = output<void>();
 
-  readonly box = BOX;
+  /** Side of the crop window in px, fitted to the screen (see fitBox). */
+  box = signal(fitBox());
   readonly maxZoom = MAX_ZOOM;
 
   src = signal<string | null>(null);
@@ -182,7 +198,7 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
   failed = signal(false);
   busy = signal(false);
 
-  private base = computed(() => coverScale(this.natW(), this.natH(), BOX));
+  private base = computed(() => coverScale(this.natW(), this.natH(), this.box()));
   scale = computed(() => this.base() * this.zoom());
 
   private img: HTMLImageElement | null = null;
@@ -198,8 +214,8 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
       this.natH.set(img.naturalHeight);
       this.zoom.set(1);
       // Start centred.
-      this.offX.set((BOX - img.naturalWidth * this.scale()) / 2);
-      this.offY.set((BOX - img.naturalHeight * this.scale()) / 2);
+      this.offX.set((this.box() - img.naturalWidth * this.scale()) / 2);
+      this.offY.set((this.box() - img.naturalHeight * this.scale()) / 2);
       this.src.set(url);
       this.ready.set(true);
     };
@@ -228,8 +244,8 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
     const dy = e.clientY - this.drag.y;
     this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
 
-    this.offX.set(clampOffset(this.offX() + dx, this.natW() * this.scale(), BOX));
-    this.offY.set(clampOffset(this.offY() + dy, this.natH() * this.scale(), BOX));
+    this.offX.set(clampOffset(this.offX() + dx, this.natW() * this.scale(), this.box()));
+    this.offY.set(clampOffset(this.offY() + dy, this.natH() * this.scale(), this.box()));
   }
 
   up(e: PointerEvent): void {
@@ -241,6 +257,28 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
     this.setZoom(this.zoom() * (e.deltaY < 0 ? 1.08 : 0.92));
   }
 
+  /** Phone rotated or window resized: refit the box and keep showing the same part of the photo. */
+  onResize(): void {
+    const next = fitBox();
+    const old = this.box();
+    if (next === old) return;
+
+    if (!this.ready()) {
+      this.box.set(next);
+      return;
+    }
+
+    const oldScale = this.scale();
+    const centreX = (old / 2 - this.offX()) / oldScale;
+    const centreY = (old / 2 - this.offY()) / oldScale;
+
+    this.box.set(next); // the cover scale follows the new box
+    const scale = this.scale();
+
+    this.offX.set(clampOffset(next / 2 - centreX * scale, this.natW() * scale, next));
+    this.offY.set(clampOffset(next / 2 - centreY * scale, this.natH() * scale, next));
+  }
+
   setZoom(value: number): void {
     if (!this.ready()) return;
 
@@ -249,8 +287,9 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
     const newScale = this.base() * next;
 
     this.zoom.set(next);
-    this.offX.set(clampOffset(zoomOffset(this.offX(), oldScale, newScale, BOX), this.natW() * newScale, BOX));
-    this.offY.set(clampOffset(zoomOffset(this.offY(), oldScale, newScale, BOX), this.natH() * newScale, BOX));
+    const box = this.box();
+    this.offX.set(clampOffset(zoomOffset(this.offX(), oldScale, newScale, box), this.natW() * newScale, box));
+    this.offY.set(clampOffset(zoomOffset(this.offY(), oldScale, newScale, box), this.natH() * newScale, box));
   }
 
   confirm(): void {
@@ -258,7 +297,7 @@ export class PmAvatarCropper implements OnInit, OnDestroy {
     if (!img || this.busy()) return;
     this.busy.set(true);
 
-    const { sx, sy, size } = sourceRect(this.offX(), this.offY(), this.scale(), BOX);
+    const { sx, sy, size } = sourceRect(this.offX(), this.offY(), this.scale(), this.box());
     const canvas = document.createElement('canvas');
     canvas.width = OUTPUT;
     canvas.height = OUTPUT;
