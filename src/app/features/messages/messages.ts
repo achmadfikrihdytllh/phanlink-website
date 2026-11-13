@@ -199,10 +199,36 @@ export class Messages implements OnInit, OnDestroy {
     this.loadConversations(true);
 
     // No websocket server (free deploy): fall back to a light poll so new messages still show up.
-    if (!environment.reverbHost) this.pollTimer = setInterval(() => this.poll(), 6000);
+    if (!environment.reverbHost) {
+      this.schedulePoll();
+
+      // Coming back to the tab: catch up right away instead of waiting for the next round.
+      const onVisible = (): void => {
+        if (document.hidden) return;
+        this.lastActivity = Date.now();
+        this.poll();
+      };
+      document.addEventListener('visibilitychange', onVisible);
+      this.destroyRef.onDestroy(() => document.removeEventListener('visibilitychange', onVisible));
+    }
   }
 
-  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Last time something happened in the open chat (message in or out, chat opened). */
+  private lastActivity = Date.now();
+
+  /** Active chat: every 6s. After a minute of silence: every 15s, which is much lighter on a small server. */
+  private pollDelay(): number {
+    return Date.now() - this.lastActivity > 60_000 ? 15_000 : 6_000;
+  }
+
+  private schedulePoll(): void {
+    this.pollTimer = setTimeout(() => {
+      this.poll();
+      this.schedulePoll();
+    }, this.pollDelay());
+  }
 
   /** True while a poll round is still running, so slow responses never pile up or arrive out of order. */
   private polling = false;
@@ -242,7 +268,10 @@ export class Messages implements OnInit, OnDestroy {
             const known = new Set(this.messages().map((m) => m.id));
             for (const m of [...res.messages].reverse()) {
               if (known.has(m.id)) this.replaceMessage(m);
-              else this.append(m);
+              else {
+                this.append(m);
+                this.lastActivity = Date.now();
+              }
             }
           },
           error: done,
@@ -270,7 +299,7 @@ export class Messages implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.pollTimer) clearTimeout(this.pollTimer);
     for (const c of this.conversations()) this.echo.leaveConversation(c.id);
     this.typingTimers.forEach((t) => clearTimeout(t));
   }
@@ -317,6 +346,7 @@ export class Messages implements OnInit, OnDestroy {
     if (this.activeConversationId === conversation.id) return;
 
     this.activeConversationId = conversation.id;
+    this.lastActivity = Date.now();
     const opened = this.conversations().find((c) => c.id === conversation.id) ?? conversation;
     this.selected.set(opened);
 
@@ -477,6 +507,7 @@ export class Messages implements OnInit, OnDestroy {
   }
 
   send(): void {
+    this.lastActivity = Date.now();
     const body = this.draft().trim();
     const id = this.selected()?.id;
     if (!body || !id) return;
