@@ -1,3 +1,7 @@
+@if (cropping(); as picked) {
+  <pm-avatar-cropper [file]="picked" (cropped)="applyCrop($event)" (cancelled)="cropping.set(null)" />
+}
+
 <div class="page pm-scroll">
   <header class="pm-hero">
     <div>

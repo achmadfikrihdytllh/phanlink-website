@@ -6,13 +6,14 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth';
 import { PhantomApi } from '../../core/services/phantom-api';
 import { PmAvatar } from '../../shared/avatar/avatar';
+import { PmAvatarCropper } from '../../shared/avatar-cropper/avatar-cropper';
 import { PmIcon } from '../../shared/icon/icon';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 
 @Component({
   selector: 'app-profile',
-  imports: [FormsModule, RouterLink, PmAvatar, PmIcon],
+  imports: [FormsModule, RouterLink, PmAvatar, PmAvatarCropper, PmIcon],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
 })
@@ -28,6 +29,8 @@ export class Profile implements OnDestroy {
   bio = signal(this.user()?.bio ?? '');
   phone = signal(this.user()?.phone_number ?? '');
 
+  /** The picked photo while it is being cropped; becomes `file` once confirmed. */
+  cropping = signal<File | null>(null);
   file = signal<File | null>(null);
   preview = signal<string | null>(null);
   saving = signal(false);
@@ -62,9 +65,15 @@ export class Profile implements OnDestroy {
     if (f.size > MAX_BYTES) return this.error.set('That photo is over 5 MB. Pick a smaller one.');
 
     this.error.set(null);
+    this.cropping.set(f);
+  }
+
+  /** The cropped square from the dialog replaces the original as the photo to upload. */
+  applyCrop(cropped: File): void {
+    this.cropping.set(null);
     this.revoke();
-    this.file.set(f);
-    this.preview.set(URL.createObjectURL(f));
+    this.file.set(cropped);
+    this.preview.set(URL.createObjectURL(cropped));
     this.saved.set(false);
   }
 

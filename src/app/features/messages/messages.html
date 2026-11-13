@@ -68,6 +68,8 @@
           <h2 class="pm-title">{{ convo.name }}</h2>
           @if (typingText(convo.id); as t) {
             <small class="typing">{{ t }}</small>
+          } @else if (presence(); as p) {
+            <small class="presence" [class.presence--on]="p.online">{{ p.text }}</small>
           } @else {
             <small>{{ convo.participants.length }} members · {{ onlineCount() }} online</small>
           }
@@ -106,6 +108,11 @@
         }
 
         @for (m of messages(); track m.id) {
+          @if (m.id === unreadFromId()) {
+            <div class="unread" role="separator">
+              <span>{{ unreadCount() }} unread {{ unreadCount() === 1 ? 'message' : 'messages' }}</span>
+            </div>
+          }
           @if (m.type === 'system') {
             <p class="sys">{{ m.body }}</p>
           } @else {

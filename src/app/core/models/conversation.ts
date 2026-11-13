@@ -5,6 +5,8 @@ export interface ConversationParticipant
   role: 'member' | 'admin';
   /** Null when the person hides read receipts. */
   last_read_at?: string | null;
+  /** Null when the person hides their online status. */
+  last_seen_at?: string | null;
 }
 
 export interface LatestMessagePreview {

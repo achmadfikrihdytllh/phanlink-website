@@ -466,6 +466,38 @@
   font-style: italic;
 }
 
+.presence--on {
+  color: var(--pm-red);
+  font-weight: 700;
+}
+
+/* "N unread messages" line, shown where you stopped reading when the chat was opened. */
+.unread {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+  margin: 4px 0;
+
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: var(--pm-red);
+  }
+
+  span {
+    padding: 2px 8px;
+    background: var(--pm-red);
+    color: #fff;
+    font: 700 8px/1.4 var(--pm-font-ui);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transform: skewX(-8deg);
+  }
+}
+
 .pinbar {
   display: flex;
   align-items: center;

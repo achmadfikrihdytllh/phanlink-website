@@ -25,6 +25,7 @@ import { Conversation } from '../../core/models/conversation';
 import { Message, MessageAttachment } from '../../core/models/message';
 import { Appearance } from '../../core/services/appearance';
 import { assetUrl } from '../../core/util/asset-url';
+import { lastSeenText } from '../../core/util/last-seen';
 import { PmAvatar } from '../../shared/avatar/avatar';
 import { PmIcon } from '../../shared/icon/icon';
 import { DialogResult, NewDialog } from '../../shared/new-dialog/new-dialog';
@@ -72,6 +73,14 @@ export class Messages implements OnInit, OnDestroy {
   replyTo = signal<Message | null>(null);
   editing = signal<Message | null>(null);
 
+  /** Ticks every 30s so "last seen 5 min ago" keeps moving without any request. */
+  private now = signal(Date.now());
+
+  /** First unread message when the chat was opened, and how many there were (drives the divider). */
+  unreadFromId = signal<number | null>(null);
+  unreadCount = signal(0);
+  private pendingUnreadId: number | null = null;
+
   /** conversationId -> userId -> name, for people typing right now. */
   typing = signal<Record<number, Record<number, string>>>({});
 
@@ -96,6 +105,18 @@ export class Messages implements OnInit, OnDestroy {
     () => this.selected()?.participants.filter((p) => p.status === 'online').length ?? 0,
   );
 
+  /** Header line for a private chat: "online" or when they were last active. Groups keep the member count. */
+  presence = computed(() => {
+    const c = this.selected();
+    if (!c || c.type !== 'private') return null;
+
+    const other = c.participants.find((p) => p.id !== this.currentUserId);
+    if (!other) return null;
+    if (other.status === 'online') return { online: true, text: 'online' };
+
+    return { online: false, text: lastSeenText(other.last_seen_at, this.now()) };
+  });
+
   /** Pinning in a group is for admins; in a private chat either person may pin. */
   canPin = computed(() => {
     const c = this.selected();
@@ -113,6 +134,9 @@ export class Messages implements OnInit, OnDestroy {
   private lastKey = 0;
 
   constructor() {
+    const tick = setInterval(() => this.now.set(Date.now()), 30_000);
+    this.destroyRef.onDestroy(() => clearInterval(tick));
+
     effect(() => {
       const list = this.messages();
       const key = list.length ? list[list.length - 1].id : 0;
@@ -127,6 +151,12 @@ export class Messages implements OnInit, OnDestroy {
         } else if (key !== this.lastKey) {
           // Only a new newest message pulls the feed down; edits and reactions leave it where it is.
           el.scrollTop = el.scrollHeight;
+
+          // Opening a chat with unread messages: land on the divider instead of the very bottom.
+          if (this.pendingUnreadId !== null && this.unreadFromId() === this.pendingUnreadId) {
+            this.pendingUnreadId = null;
+            setTimeout(() => this.feed()?.nativeElement.querySelector('.unread')?.scrollIntoView({ block: 'center' }));
+          }
         }
         this.lastKey = key;
       });
@@ -263,7 +293,15 @@ export class Messages implements OnInit, OnDestroy {
     if (this.activeConversationId === conversation.id) return;
 
     this.activeConversationId = conversation.id;
-    this.selected.set(this.conversations().find((c) => c.id === conversation.id) ?? conversation);
+    const opened = this.conversations().find((c) => c.id === conversation.id) ?? conversation;
+    this.selected.set(opened);
+
+    // Remember where I stopped reading before the read marker moves, so the divider can sit there.
+    const readAt = opened.participants.find((p) => p.id === this.currentUserId)?.last_read_at;
+    const unread = opened.unread_count ?? 0;
+    this.unreadFromId.set(null);
+    this.unreadCount.set(0);
+    this.pendingUnreadId = null;
     this.messages.set([]);
     this.hasMore.set(false);
     this.menuFor.set(null);
@@ -281,7 +319,19 @@ export class Messages implements OnInit, OnDestroy {
         next: (res) => {
           if (this.activeConversationId !== conversation.id) return;
           // API returns newest first; the feed reads oldest first.
-          this.messages.set([...res.messages].reverse());
+          const thread = [...res.messages].reverse();
+
+          if (unread > 0) {
+            const since = readAt ? new Date(readAt).getTime() : 0;
+            const first = thread.find((m) => m.sender?.id !== this.currentUserId && m.id > 0 && new Date(m.created_at).getTime() > since);
+            if (first) {
+              this.unreadFromId.set(first.id);
+              this.unreadCount.set(unread);
+              this.pendingUnreadId = first.id;
+            }
+          }
+
+          this.messages.set(thread);
           this.hasMore.set(res.meta.has_more);
           this.loading.set(false);
         },
